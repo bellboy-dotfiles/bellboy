@@ -70,6 +70,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "capisco"
+version = "0.1.0-pre"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs 3.0.2",
+ "dunce",
+ "env_logger",
+ "format",
+ "lifetime",
+ "log",
+ "same-file",
+ "serde",
+ "strum",
+ "thiserror",
+ "toml",
+ "url",
+ "xdg",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -151,27 +172,6 @@ dependencies = [
  "libc",
  "redox_users 0.4.0",
  "winapi",
-]
-
-[[package]]
-name = "dit"
-version = "0.1.0-pre"
-dependencies = [
- "anyhow",
- "clap",
- "dirs 3.0.2",
- "dunce",
- "env_logger",
- "format",
- "lifetime",
- "log",
- "same-file",
- "serde",
- "strum",
- "thiserror",
- "toml",
- "url",
- "xdg",
 ]
 
 [[package]]
