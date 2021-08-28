@@ -2,29 +2,104 @@ use std::{
     borrow::Cow,
     convert::Infallible,
     ffi::OsStr,
-    fmt::{self, Debug, Display, Formatter},
+    fmt::Debug,
     path::{Path, PathBuf},
+    process::Command,
     str::FromStr,
 };
 use thiserror::Error as ThisError;
 
 pub use cli::GitCli;
 
-pub trait Git
+pub trait GitTrait
 where
     Self: Debug,
 {
+    type Repo: GitRepoTrait;
+
     fn exists(
         &self,
         path: &Path,
         repo_kind: GitRepoKind,
     ) -> Result<Result<(), GitExistCheckFailure>, GitExistError>;
+
     fn clone(
         &self,
         path: &Path,
         source: RepoSource<'_>,
         repo_kind: GitRepoKind,
     ) -> Result<(), GitCloneError>;
+
+    fn open_repo(&self, options: OpenRepoOptions<'_>) -> Result<Self::Repo, OpenRepoError>;
+}
+
+pub trait GitRepoTrait {
+    fn run_cmd<T>(&self, cmd: Command, f: impl FnOnce(Command) -> T) -> T;
+    fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError>;
+}
+
+pub enum OpenRepoOptions<'a> {
+    Bare {
+        repo_path: &'a Path,
+        work_tree_path: &'a Path,
+    },
+    Normal {
+        work_tree_path: &'a Path,
+    },
+}
+
+#[derive(Debug)]
+pub enum DynGit {
+    Cli(GitCli),
+}
+
+pub enum DynGitRepo {
+    Cli(<GitCli as GitTrait>::Repo),
+}
+
+impl GitTrait for DynGit {
+    type Repo = DynGitRepo;
+
+    fn exists(
+        &self,
+        path: &Path,
+        repo_kind: GitRepoKind,
+    ) -> Result<Result<(), GitExistCheckFailure>, GitExistError> {
+        match self {
+            Self::Cli(cli) => cli.exists(path, repo_kind),
+        }
+    }
+
+    fn clone(
+        &self,
+        path: &Path,
+        source: RepoSource<'_>,
+        repo_kind: GitRepoKind,
+    ) -> Result<(), GitCloneError> {
+        match self {
+            Self::Cli(cli) => cli.clone(path, source, repo_kind),
+        }
+    }
+
+    fn open_repo(&self, options: OpenRepoOptions<'_>) -> Result<Self::Repo, OpenRepoError> {
+        match self {
+            Self::Cli(cli) => Ok(DynGitRepo::Cli(cli.open_repo(options)?)),
+        }
+    }
+}
+
+impl GitRepoTrait for DynGitRepo {
+    fn run_cmd<T>(&self, cmd: Command, f: impl FnOnce(Command) -> T) -> T {
+        match self {
+            Self::Cli(cli) => cli.run_cmd(cmd, f),
+        }
+    }
+
+    fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError> {
+        match self {
+            Self::Cli(cli) => cli.set_excludes_file(path),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -53,17 +128,11 @@ pub struct GitExistError {
     source: Option<anyhow::Error>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
+#[error("expected {expected:?}, got {actual:?}")]
 pub struct GitExistCheckFailure {
     expected: GitRepoKind,
     actual: Option<GitRepoKind>,
-}
-
-impl Display for GitExistCheckFailure {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let Self { expected, actual } = self;
-        write!(f, "expected {:?}, got {:?}", expected, actual)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,12 +149,37 @@ pub struct GitCloneError {
     source: Option<anyhow::Error>,
 }
 
+const EXCLUDES_FILE_CONFIG_PATH: &str = "core.excludesFile";
+
+#[derive(Debug, ThisError)]
+#[error("failed to set `{}` config", EXCLUDES_FILE_CONFIG_PATH)]
+pub struct GitSetExcludeFileError(#[from] anyhow::Error);
+
+#[derive(Debug, ThisError)]
+#[error("failed to open repo at {}", path.display())]
+pub struct OpenRepoError {
+    path: PathBuf,
+    source: anyhow::Error,
+}
+
+fn prep_cmd<'a>(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Path) {
+    cmd.envs([
+        ("GIT_WORK_TREE", (&*git_work_tree_path).as_os_str()),
+        ("GIT_DIR", (&*git_dir_path).as_os_str()),
+    ]);
+}
+
 mod cli {
-    use super::{Git, GitCloneError, GitExistCheckFailure, GitExistError, GitRepoKind, RepoSource};
+    use super::{
+        prep_cmd, GitCloneError, GitExistCheckFailure, GitExistError, GitRepoKind, GitRepoTrait,
+        GitSetExcludeFileError, GitTrait, OpenRepoError, OpenRepoOptions, RepoSource,
+        EXCLUDES_FILE_CONFIG_PATH,
+    };
+    use anyhow::{anyhow, Context};
     use std::{
         borrow::Cow,
         ffi::OsStr,
-        path::Path,
+        path::{Path, PathBuf},
         process::{Command, ExitStatus, Output},
     };
 
@@ -93,6 +187,12 @@ mod cli {
 
     #[derive(Debug)]
     pub struct GitCli;
+
+    #[derive(Debug)]
+    pub struct GitCliRepo {
+        work_tree_path: PathBuf,
+        repo_path: PathBuf,
+    }
 
     impl GitCli {
         fn cmd_failure_err(status: ExitStatus) -> Option<Cow<'static, str>> {
@@ -106,7 +206,9 @@ mod cli {
         }
     }
 
-    impl Git for GitCli {
+    impl GitTrait for GitCli {
+        type Repo = GitCliRepo;
+
         fn exists(
             &self,
             path: &Path,
@@ -217,8 +319,71 @@ mod cli {
                 Ok(())
             }
 
-            // TODO: `git reset`?
             // TODO: Track HEAD branch against `origin`?
+            // TODO: `git reset`?
+        }
+
+        fn open_repo(&self, options: OpenRepoOptions<'_>) -> Result<Self::Repo, OpenRepoError> {
+            let exists = |path, kind| {
+                self.exists(path, kind)
+                    .map_err(|e| anyhow::Error::new(e))
+                    .and_then(|res| Ok(res?))
+                    .map_err(|source| OpenRepoError {
+                        path: path.to_owned(),
+                        source: source.into(),
+                    })
+            };
+            match options {
+                OpenRepoOptions::Bare {
+                    repo_path,
+                    work_tree_path,
+                } => exists(repo_path, GitRepoKind::Bare).map(|()| GitCliRepo {
+                    repo_path: repo_path.to_owned(),
+                    work_tree_path: work_tree_path.to_owned(),
+                }),
+                OpenRepoOptions::Normal { work_tree_path } => {
+                    exists(work_tree_path, GitRepoKind::Normal).map(|()| GitCliRepo {
+                        repo_path: work_tree_path.to_owned(),
+                        work_tree_path: work_tree_path.to_owned(),
+                    })
+                }
+            }
+        }
+    }
+
+    impl GitCliRepo {
+        fn git_cmd() -> Command {
+            Command::new("git")
+        }
+    }
+
+    impl GitRepoTrait for GitCliRepo {
+        fn run_cmd<T>(&self, mut cmd: Command, f: impl FnOnce(Command) -> T) -> T {
+            let Self {
+                work_tree_path,
+                repo_path,
+            } = &self;
+            prep_cmd(&mut cmd, work_tree_path, repo_path);
+            f(cmd)
+        }
+
+        fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError> {
+            let mut cmd = Self::git_cmd();
+            cmd.arg("config");
+            if let Some(path) = path {
+                cmd.args(["set", "core.excludesFile", EXCLUDES_FILE_CONFIG_PATH]);
+                cmd.arg(path);
+            } else {
+                cmd.args(["--unset", EXCLUDES_FILE_CONFIG_PATH]);
+            }
+
+            let exit_status = self
+                .run_cmd(cmd, |mut cmd| cmd.status())
+                .context("failed to spawn command")?;
+            if !exit_status.success() {
+                return Err(anyhow!("command did not exit successfully").into());
+            }
+            Ok(())
         }
     }
 }

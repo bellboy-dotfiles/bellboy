@@ -1,7 +1,8 @@
 use crate::{git::RepoSource, run_state::RepoName};
-use anyhow::anyhow;
 use clap::Clap;
-use std::{path::PathBuf, str::FromStr};
+use std::{ffi::OsString, path::PathBuf, process::Command, str::FromStr};
+use strum::EnumIter;
+use thiserror::Error as ThisError;
 
 #[derive(Clap, Debug)]
 #[clap(about, author)]
@@ -9,10 +10,14 @@ pub enum Cli {
     // Start {
     // starter: Option<PathBuf>,
     // }
-    // Show {
-    //     #[clap(long)]
-    //     as_starter
-    // },
+    Show {
+        #[clap(long, default_value = "all")]
+        repo_spec: RepoSpec,
+        #[clap(long, default_value = "name")]
+        by: ShowBy,
+        #[clap(long, conflicts_with = "by")]
+        as_starter: bool,
+    },
     #[clap(subcommand)]
     Repo(RepoSubcommand),
     // Sync {
@@ -23,10 +28,103 @@ pub enum Cli {
 }
 
 #[derive(Clap, Debug)]
+pub struct ShowSubcommand {}
+
+#[derive(Debug)]
+pub enum RepoSpec {
+    All,
+    // Name(Regex),
+    Kind(CliRepoKind),
+}
+
+impl Default for RepoSpec {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
+#[derive(Debug, ThisError)]
+pub enum InvalidRepoSpecError {
+    #[error(
+        "{what:?} is not a recognized repo spec; expected \"all\" \
+        or spec of the form \"<type>:<value>\""
+    )]
+    Unrecognized { what: String },
+    #[error("{what:?} is not a recognized parameterized spec type")]
+    UnrecognizedType { what: String },
+    #[error("failed to parse `kind`")]
+    ParseRepoKind { source: InvalidRepoKindError },
+}
+
+impl FromStr for RepoSpec {
+    type Err = InvalidRepoSpecError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "all" => Self::All,
+            s => {
+                if let Some((type_, value)) = s.split_once(':') {
+                    match type_ {
+                        "kind" => Self::Kind(
+                            value
+                                .parse()
+                                .map_err(|source| InvalidRepoSpecError::ParseRepoKind { source })?,
+                        ),
+                        s => {
+                            return Err(InvalidRepoSpecError::UnrecognizedType {
+                                what: s.to_string(),
+                            });
+                        }
+                    }
+                } else {
+                    return Err(InvalidRepoSpecError::Unrecognized {
+                        what: s.to_string(),
+                    });
+                }
+            }
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum ShowBy {
+    Name,
+    Kind,
+}
+
+impl Default for ShowBy {
+    fn default() -> Self {
+        Self::Name
+    }
+}
+
+#[derive(Debug, ThisError)]
+#[error("invalid `by` spec; expected \"name\" or \"kind\", got {actual:?}")]
+pub struct InvalidShowByError {
+    actual: String,
+}
+
+impl FromStr for ShowBy {
+    type Err = InvalidShowByError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "name" => Self::Name,
+            "kind" => Self::Kind,
+            actual => {
+                return Err(InvalidShowByError {
+                    actual: actual.to_string(),
+                })
+            }
+        })
+    }
+}
+
+#[derive(Clap, Debug)]
 pub enum RepoSubcommand {
     // Init {
     //     name: RepoName<'static>,
-    //     local_path: Option<PathBuf>,
+    //     local: Option<PathBuf>,
     // },
     /// Clones a Git repository by cloning it from the specified `SOURCE`.
     ///
@@ -34,13 +132,17 @@ pub enum RepoSubcommand {
     /// error.
     #[clap(subcommand)]
     Add(RepoAddSubcommand),
-    // Run {
-    //     repo_name: RepoName<'static>,
-    //     #[clap(flatten)]
-    //     cmd_args: CommandAndArgs,
-    // },
+    /// Runs a command
+    Run {
+        repo_name: RepoName<'static>,
+        // #[clap(long)]
+        // allow_local: bool,
+        #[clap(flatten)]
+        cmd_and_args: CommandAndArgs,
+    },
     // ForEach {
-    //     cmd_args: CommandAndArgs,
+    //     #[clap(flatten)]
+    //     cmd_and_args: CommandAndArgs,
     // },
     // Remove {
     //     repo_name: RepoName<'static>,
@@ -49,6 +151,8 @@ pub enum RepoSubcommand {
     // },
     // Enter {
     //     repo_name: Option<RepoName<'static>>,
+    //     #[clap(long)]
+    //     cd: bool,
     // },
 }
 
@@ -85,27 +189,42 @@ pub enum RepoAddSubcommand {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, EnumIter)]
 pub enum CliRepoKind {
     Local,
     Global,
 }
 
+#[derive(Debug, ThisError)]
+#[error("unrecognized repo kind {what:?}")]
+pub struct InvalidRepoKindError {
+    what: String,
+}
+
 impl FromStr for CliRepoKind {
-    type Err = anyhow::Error;
+    type Err = InvalidRepoKindError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             // TODO: How to make better diagnostics helping people with bad values?
             "local" => Ok(Self::Local),
             "global" => Ok(Self::Global),
-            s => Err(anyhow!("unrecognized repo kind {:?}", s)),
+            s => Err(InvalidRepoKindError { what: s.to_owned() }),
         }
     }
 }
 
-// #[derive(Clap, Debug)]
-// pub struct CommandAndArgs {
-//     cmd: OsString,
-//     args: Vec<OsString>,
-// }
+#[derive(Clap, Debug)]
+pub struct CommandAndArgs {
+    cmd: OsString,
+    args: Vec<OsString>,
+}
+
+impl CommandAndArgs {
+    pub fn to_std(&self) -> Command {
+        let Self { cmd, args } = self;
+        let mut cmd = Command::new(cmd);
+        cmd.args(args);
+        cmd
+    }
+}
