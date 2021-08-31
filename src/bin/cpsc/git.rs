@@ -343,7 +343,7 @@ mod cli {
                 }),
                 OpenRepoOptions::Normal { work_tree_path } => {
                     exists(work_tree_path, GitRepoKind::Normal).map(|()| GitCliRepo {
-                        repo_path: work_tree_path.to_owned(),
+                        repo_path: work_tree_path.join(".git"),
                         work_tree_path: work_tree_path.to_owned(),
                     })
                 }
