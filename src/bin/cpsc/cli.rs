@@ -135,6 +135,8 @@ pub enum RepoSubcommand {
     /// Runs a command
     Run {
         repo_name: RepoName<'static>,
+        #[clap(long)]
+        cd: bool,
         // #[clap(long)]
         // allow_local: bool,
         #[clap(flatten)]
@@ -144,11 +146,11 @@ pub enum RepoSubcommand {
     //     #[clap(flatten)]
     //     cmd_and_args: CommandAndArgs,
     // },
-    // Remove {
-    //     repo_name: RepoName<'static>,
-    //     #[clap(long)]
-    //     no_delete: bool,
-    // },
+    Remove {
+        repo_name: RepoName<'static>,
+        #[clap(long)]
+        no_delete: bool,
+    },
     // Enter {
     //     repo_name: Option<RepoName<'static>>,
     //     #[clap(long)]
@@ -189,7 +191,7 @@ pub enum RepoAddSubcommand {
     },
 }
 
-#[derive(Copy, Clone, Debug, EnumIter)]
+#[derive(Copy, Clone, Debug, EnumIter, Eq, PartialEq)]
 pub enum CliRepoKind {
     Local,
     Global,
@@ -216,15 +218,24 @@ impl FromStr for CliRepoKind {
 
 #[derive(Clap, Debug)]
 pub struct CommandAndArgs {
-    cmd: OsString,
-    args: Vec<OsString>,
+    #[clap(raw(true))]
+    cmd_and_args: Vec<OsString>,
+}
+
+#[derive(Debug, ThisError)]
+pub enum CommandError {
+    #[error("command not specified")]
+    CommandNotSpecified,
 }
 
 impl CommandAndArgs {
-    pub fn to_std(&self) -> Command {
-        let Self { cmd, args } = self;
+    pub fn to_std(&self) -> Result<Command, CommandError> {
+        let Self { cmd_and_args } = self;
+        let (cmd, args) = cmd_and_args
+            .split_first()
+            .ok_or(CommandError::CommandNotSpecified)?;
         let mut cmd = Command::new(cmd);
         cmd.args(args);
-        cmd
+        Ok(cmd)
     }
 }

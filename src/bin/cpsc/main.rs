@@ -11,18 +11,20 @@ mod git;
 mod run_state {
     use crate::{
         cli::{Cli, CliRepoKind, RepoAddSubcommand, RepoSpec, RepoSubcommand, ShowBy},
-        git::{DynGit, GitCli, GitRepoKind, GitRepoTrait, GitTrait, OpenRepoOptions},
+        git::{DynGit, DynGitRepo, GitCli, GitRepoKind, GitRepoTrait, GitTrait, OpenRepoOptions},
     };
     use anyhow::{anyhow, bail, Context, Result};
     use format::lazy_format;
     use lifetime::{IntoStatic, ToBorrowed};
+    use remove_dir_all::remove_dir_all;
     use same_file::is_same_file;
     use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
     use std::{
         borrow::Cow,
         collections::BTreeMap,
+        env::{current_dir, set_current_dir},
         fmt::{self, Debug, Display, Formatter},
-        fs::{self, OpenOptions},
+        fs::{self, remove_file, OpenOptions},
         io::{BufReader, Read},
         path::{Path, PathBuf},
         str::FromStr,
@@ -39,7 +41,7 @@ mod run_state {
     impl Directories {
         pub fn new() -> anyhow::Result<Self> {
             // TODO: Use native config folders if they exist; warn that they're not portable.,
-            let base_dirs = BaseDirectories::with_prefix(env!("CARGO_BIN_NAME"))
+            let base_dirs = BaseDirectories::with_prefix(env!("CARGO_PKG_NAME"))
                 .context("failed to detect XDG directories")?;
             Ok(Self { base_dirs })
         }
@@ -75,7 +77,7 @@ mod run_state {
         fn matches(&self, (_repo_name, repo): (&RepoName<'_>, &RepoEntry)) -> bool {
             match self {
                 Self::All => true,
-                &Self::Kind(kind) => repo.matches_kind(kind),
+                &Self::Kind(kind) => repo.kind() == kind,
             }
         }
     }
@@ -298,6 +300,7 @@ mod run_state {
                         }
                         RepoSubcommand::Run {
                             repo_name,
+                            cd,
                             cmd_and_args,
                         } => {
                             let Self {
@@ -307,7 +310,9 @@ mod run_state {
                                 needs_persist: _,
                             } = self;
 
-                            let RepoEntry { kind } = repos.get(&repo_name).with_context(|| {
+                            let mut cmd = cmd_and_args.to_std()?;
+
+                            let repo = repos.get(&repo_name).with_context(|| {
                                 anyhow!(
                                     concat!(
                                         "no repo configured with the name {:?} -- do you need to `",
@@ -319,24 +324,13 @@ mod run_state {
                             })?;
 
                             let repo = {
-                                let repo_path = kind.path(dirs, repo_name)?;
-                                let work_tree_path;
-                                git.open_repo(match kind {
-                                    RepoEntryKind::Local { .. } => OpenRepoOptions::Normal {
-                                        work_tree_path: &*repo_path,
-                                    },
-                                    RepoEntryKind::Global { .. } => {
-                                        work_tree_path = kind.work_tree_path(dirs)?;
-                                        OpenRepoOptions::Bare {
-                                            repo_path: &*repo_path,
-                                            work_tree_path: &*work_tree_path,
-                                        }
-                                    }
-                                })
-                                .context("failed to open repo")?
+                                if cd {
+                                    cmd.current_dir(repo.work_tree_path(dirs)?);
+                                }
+                                repo.open(git, dirs, repo_name)?
                             };
 
-                            let cmd_status = repo.run_cmd(cmd_and_args.to_std(), |mut cmd| {
+                            let cmd_status = repo.run_cmd(cmd, |mut cmd| {
                                 log::info!("running command {:?}", cmd);
                                 let status = cmd.status().context("failed to spawn command");
                                 log::debug!("returning from command");
@@ -355,6 +349,63 @@ mod run_state {
                             };
 
                             // TODO: Return with exit code
+
+                            Ok(())
+                        }
+                        RepoSubcommand::Remove {
+                            repo_name,
+                            no_delete,
+                        } => {
+                            let Self {
+                                dirs,
+                                git,
+                                repos,
+                                needs_persist,
+                            } = self;
+
+                            let repo = repos.remove(&repo_name).with_context(|| {
+                                anyhow!("no repo with the name {:?} is configured", repo_name)
+                            })?;
+                            *needs_persist = true;
+
+                            // TODO: Seek confirmation. This is dangerous, yo.
+
+                            // TODO: Check if there are any uncommitted files or branches, if so,
+                            // seek confirmation.
+
+                            if !no_delete {
+                                match repo.kind() {
+                                    CliRepoKind::Global => {
+                                        let cwd = current_dir().context(
+                                            "failed to copy current working directory path",
+                                        )?;
+                                        // Try to delete all files associated with this repo
+                                        let repo = repo.open(git, dirs, repo_name.to_borrowed())?;
+                                        match repo.list_files().context("failed to list files") {
+                                            Ok(files) => {
+                                                for file in files {
+                                                    log::info!("removing {}", file.display());
+                                                    match remove_file(&file) {
+                                                        Ok(()) => (),
+                                                        Err(e) => log::warn!(
+                                                            "failed to remove {:?}: {}",
+                                                            file,
+                                                            e
+                                                        ),
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => log::warn!("{}", e),
+                                        }
+                                        set_current_dir(cwd).context("failed to switch back to original working directory path")?;
+                                    }
+                                    CliRepoKind::Local => (), // deleting the folder should suffice
+                                }
+                                let repo_path = repo.path(dirs, repo_name)?;
+                                remove_dir_all(&repo_path).with_context(|| {
+                                    anyhow!("failed to delete repo at {:?}", repo_path)
+                                })?;
+                            }
 
                             Ok(())
                         }
@@ -391,7 +442,7 @@ mod run_state {
                                     repos
                                         .iter()
                                         .filter(|repo| repo_spec.matches(*repo))
-                                        .filter(|(_name, repo)| repo.matches_kind(repo_kind))
+                                        .filter(|(_name, repo)| repo.kind() == repo_kind)
                                         .for_each(|(name, repo)| match repo_kind {
                                             CliRepoKind::Global => {
                                                 println!("  {}", name);
@@ -582,11 +633,35 @@ mod run_state {
             })
         }
 
-        pub fn matches_kind(&self, kind: CliRepoKind) -> bool {
-            match kind {
-                CliRepoKind::Local => matches!(self.kind, RepoEntryKind::Local { .. }),
-                CliRepoKind::Global => matches!(self.kind, RepoEntryKind::Global { .. }),
-            }
+        pub fn open(
+            &self,
+            git: &DynGit,
+            dirs: &Directories,
+            name: RepoName<'_>,
+        ) -> anyhow::Result<DynGitRepo> {
+            let Self { kind } = self;
+
+            let repo_path = kind.path(dirs, name.to_borrowed())?;
+            let work_tree_path;
+            let options = match kind {
+                RepoEntryKind::Local { .. } => OpenRepoOptions::Normal {
+                    work_tree_path: &*repo_path,
+                },
+                RepoEntryKind::Global { .. } => {
+                    work_tree_path = kind.work_tree_path(dirs)?;
+                    OpenRepoOptions::Bare {
+                        repo_path: &*repo_path,
+                        work_tree_path: &*work_tree_path,
+                    }
+                }
+            };
+            git.open_repo(options)
+                .with_context(|| anyhow!("failed to open {:?} repo", name))
+        }
+
+        pub fn kind(&self) -> CliRepoKind {
+            let Self { kind } = self;
+            kind.kind()
         }
     }
 
@@ -613,6 +688,13 @@ mod run_state {
             let mut path = dirs.global_repos_dir_path()?;
             path.push(name.as_single_path_segment());
             Ok(path)
+        }
+
+        pub fn kind(&self) -> CliRepoKind {
+            match self {
+                Self::Local { .. } => CliRepoKind::Local,
+                Self::Global { .. } => CliRepoKind::Global,
+            }
         }
     }
 

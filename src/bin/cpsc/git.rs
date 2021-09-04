@@ -34,8 +34,11 @@ where
 }
 
 pub trait GitRepoTrait {
+    type ListFilesIter: Iterator<Item = PathBuf>;
+
     fn run_cmd<T>(&self, cmd: Command, f: impl FnOnce(Command) -> T) -> T;
     fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError>;
+    fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError>;
 }
 
 pub enum OpenRepoOptions<'a> {
@@ -89,6 +92,8 @@ impl GitTrait for DynGit {
 }
 
 impl GitRepoTrait for DynGitRepo {
+    type ListFilesIter = Box<dyn Iterator<Item = PathBuf>>;
+
     fn run_cmd<T>(&self, cmd: Command, f: impl FnOnce(Command) -> T) -> T {
         match self {
             Self::Cli(cli) => cli.run_cmd(cmd, f),
@@ -98,6 +103,12 @@ impl GitRepoTrait for DynGitRepo {
     fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError> {
         match self {
             Self::Cli(cli) => cli.set_excludes_file(path),
+        }
+    }
+
+    fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError> {
+        match self {
+            Self::Cli(cli) => cli.list_files(),
         }
     }
 }
@@ -162,6 +173,12 @@ pub struct OpenRepoError {
     source: anyhow::Error,
 }
 
+#[derive(Debug, ThisError)]
+#[error("failed to list files")]
+pub struct GitListFilesError {
+    source: anyhow::Error,
+}
+
 fn prep_cmd<'a>(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Path) {
     cmd.envs([
         ("GIT_WORK_TREE", (&*git_work_tree_path).as_os_str()),
@@ -171,16 +188,17 @@ fn prep_cmd<'a>(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Pat
 
 mod cli {
     use super::{
-        prep_cmd, GitCloneError, GitExistCheckFailure, GitExistError, GitRepoKind, GitRepoTrait,
-        GitSetExcludeFileError, GitTrait, OpenRepoError, OpenRepoOptions, RepoSource,
-        EXCLUDES_FILE_CONFIG_PATH,
+        prep_cmd, GitCloneError, GitExistCheckFailure, GitExistError, GitListFilesError,
+        GitRepoKind, GitRepoTrait, GitSetExcludeFileError, GitTrait, OpenRepoError,
+        OpenRepoOptions, RepoSource, EXCLUDES_FILE_CONFIG_PATH,
     };
-    use anyhow::{anyhow, Context};
+    use anyhow::{anyhow, ensure, Context};
     use std::{
         borrow::Cow,
         ffi::OsStr,
+        io::{BufRead, Cursor},
         path::{Path, PathBuf},
-        process::{Command, ExitStatus, Output},
+        process::{Command, ExitStatus, Output, Stdio},
     };
 
     // TODO: use `GIT_REFLOG_ACTION` for logging niceness
@@ -358,6 +376,8 @@ mod cli {
     }
 
     impl GitRepoTrait for GitCliRepo {
+        type ListFilesIter = Box<dyn Iterator<Item = PathBuf>>;
+
         fn run_cmd<T>(&self, mut cmd: Command, f: impl FnOnce(Command) -> T) -> T {
             let Self {
                 work_tree_path,
@@ -384,6 +404,31 @@ mod cli {
                 return Err(anyhow!("command did not exit successfully").into());
             }
             Ok(())
+        }
+
+        fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError> {
+            let mut cmd = Command::new("git");
+            cmd.arg("ls-files").stderr(Stdio::inherit());
+            (|| {
+                let Output {
+                    status,
+                    stdout,
+                    stderr: _,
+                } = self
+                    .run_cmd(cmd, |mut cmd| cmd.output())
+                    .context("failed to spawn file listing command")
+                    .map_err(|source| GitListFilesError { source })?;
+                ensure!(status.success(), "command did not exit with 0");
+                let files = BufRead::lines(Cursor::new(stdout))
+                    .map(|l| {
+                        l.context("failed to read line from output")
+                            .map(|l| Path::new(&l).to_owned())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(files.into_iter())
+            })()
+            .map(|i| -> Box<dyn Iterator<Item = PathBuf>> { Box::new(i) })
+            .map_err(|source| GitListFilesError { source })
         }
     }
 }

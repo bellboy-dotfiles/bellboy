@@ -12,6 +12,7 @@ env_logger = "0.9.0"
 format = "0.2.4"
 lifetime = { version = "0.1.0", features = ["macros"] }
 log = "0.4.14"
+remove_dir_all = "0.7.0"
 same-file = "1.0.6"
 serde = { version = "1.0.128", features = ["derive"] }
 strum = { version = "0.21.0", features = ["derive"] }
