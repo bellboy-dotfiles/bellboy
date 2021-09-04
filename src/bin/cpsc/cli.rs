@@ -124,7 +124,7 @@ impl FromStr for ShowBy {
 pub enum RepoSubcommand {
     // Init {
     //     name: RepoName<'static>,
-    //     local: Option<PathBuf>,
+    //     standalone: Option<PathBuf>,
     // },
     /// Clones a Git repository by cloning it from the specified `SOURCE`.
     ///
@@ -138,7 +138,7 @@ pub enum RepoSubcommand {
         #[clap(long)]
         cd: bool,
         // #[clap(long)]
-        // allow_local: bool,
+        // allow_standalone: bool,
         #[clap(flatten)]
         cmd_and_args: CommandAndArgs,
     },
@@ -160,7 +160,7 @@ pub enum RepoSubcommand {
 
 #[derive(Clap, Debug)]
 pub enum RepoAddSubcommand {
-    Global {
+    Overlay {
         /// The URL
         source: RepoSource<'static>,
         /// The alias by which this repo will be referred to when used later with this tool.
@@ -170,7 +170,7 @@ pub enum RepoAddSubcommand {
         #[clap(long)]
         name: RepoName<'static>,
     },
-    Local {
+    Standalone {
         path: PathBuf,
         /// The alias by which this repo will be referred to when used later with this tool.
         ///
@@ -193,8 +193,8 @@ pub enum RepoAddSubcommand {
 
 #[derive(Copy, Clone, Debug, EnumIter, Eq, PartialEq)]
 pub enum CliRepoKind {
-    Local,
-    Global,
+    Standalone,
+    Overlay,
 }
 
 #[derive(Debug, ThisError)]
@@ -209,8 +209,8 @@ impl FromStr for CliRepoKind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             // TODO: How to make better diagnostics helping people with bad values?
-            "local" => Ok(Self::Local),
-            "global" => Ok(Self::Global),
+            "standalone" => Ok(Self::Standalone),
+            "overlay" => Ok(Self::Overlay),
             s => Err(InvalidRepoKindError { what: s.to_owned() }),
         }
     }

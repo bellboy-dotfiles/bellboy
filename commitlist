@@ -1,5 +1,5 @@
 - [ ] Rename `Git` to `GitTrait`, use `DynGit` structure
-- [ ] Add population of global repos to DB
+- [ ] Add population of overlay repos to DB
 - [ ] Implement `add`
 - [ ] Implement `show`
 - [ ] Implement `run`

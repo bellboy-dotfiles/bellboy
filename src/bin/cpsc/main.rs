@@ -46,18 +46,18 @@ mod run_state {
             Ok(Self { base_dirs })
         }
 
-        fn local_repo_db_path(&self) -> anyhow::Result<PathBuf> {
+        fn standalone_repo_db_path(&self) -> anyhow::Result<PathBuf> {
             let Self { base_dirs } = self;
             base_dirs
-                .place_data_file("local_repos.toml")
+                .place_data_file("standalone_repos.toml")
                 .context("failed to place database file path")
         }
 
-        fn global_repos_dir_path(&self) -> anyhow::Result<PathBuf> {
+        fn overlay_repos_dir_path(&self) -> anyhow::Result<PathBuf> {
             let Self { base_dirs } = self;
             base_dirs
-                .create_data_directory("global_repos")
-                .context("failed to create global repos directory")
+                .create_data_directory("overlay_repos")
+                .context("failed to create overlay repos directory")
         }
 
         fn home_dir_path(&self) -> anyhow::Result<PathBuf> {
@@ -85,8 +85,8 @@ mod run_state {
     impl RunState {
         pub fn init(dirs: Directories) -> anyhow::Result<Self> {
             let mut repos = {
-                let local_repos_db_path = dirs.local_repo_db_path()?;
-                log::info!("local repos DB path: {}", local_repos_db_path.display());
+                let standalone_repos_db_path = dirs.standalone_repo_db_path()?;
+                log::info!("standalone repos DB path: {}", standalone_repos_db_path.display());
                 let db_toml = {
                     let mut buf = String::new();
                     let mut reader = BufReader::new(
@@ -94,41 +94,41 @@ mod run_state {
                             .read(true)
                             .write(true)
                             .create(true)
-                            .open(&local_repos_db_path)
+                            .open(&standalone_repos_db_path)
                             .with_context(|| {
                                 anyhow!(
-                                    "failed to open local repo file at {}",
-                                    local_repos_db_path.display(),
+                                    "failed to open standalone repo file at {}",
+                                    standalone_repos_db_path.display(),
                                 )
                             })?,
                     );
                     reader.read_to_string(&mut buf).with_context(|| {
                         anyhow!(
-                            "failed to read local repo contents at {}",
-                            local_repos_db_path.display()
+                            "failed to read standalone repo contents at {}",
+                            standalone_repos_db_path.display()
                         )
                     })?;
                     buf
                 };
 
-                let LocalRepoDatabase { local_repos } = if db_toml.trim().is_empty() {
-                    LocalRepoDatabase::default()
+                let StandaloneRepoDatabase { standalone_repos } = if db_toml.trim().is_empty() {
+                    StandaloneRepoDatabase::default()
                 } else {
                     // TODO: Validate duplicate entry handling.
                     toml::from_str(&db_toml).with_context(|| {
                         anyhow!(
-                            "failed to deserialize TOML from local repo file {}",
-                            local_repos_db_path.display(),
+                            "failed to deserialize TOML from standalone repo file {}",
+                            standalone_repos_db_path.display(),
                         )
                     })?
                 };
-                local_repos
+                standalone_repos
                     .into_iter()
-                    .map(|(name, LocalRepoEntry { path })| {
+                    .map(|(name, StandaloneRepoEntry { path })| {
                         (
                             name.into_static(),
                             RepoEntry {
-                                kind: RepoEntryKind::Local {
+                                kind: RepoEntryKind::Standalone {
                                     repo_path: path.into_static(),
                                 },
                             },
@@ -137,18 +137,18 @@ mod run_state {
                     .collect::<BTreeMap<_, _>>()
             };
 
-            let global_repos_dir_path = dirs.global_repos_dir_path()?;
-            log::info!("global repos path: {}", global_repos_dir_path.display());
-            match global_repos_dir_path.read_dir().with_context(|| {
+            let overlay_repos_dir_path = dirs.overlay_repos_dir_path()?;
+            log::info!("overlay repos path: {}", overlay_repos_dir_path.display());
+            match overlay_repos_dir_path.read_dir().with_context(|| {
                 anyhow!(
-                    "failed to read global repo dirs from {}",
-                    global_repos_dir_path.display(),
+                    "failed to read overlay repo dirs from {}",
+                    overlay_repos_dir_path.display(),
                 )
             }) {
                 Ok(entries) => {
                     entries.filter_map(|ent| {
                         (|| -> anyhow::Result<_> {
-                            let ent = ent.with_context(|| anyhow!("failed to read a dir entry in global repo path"))?;
+                            let ent = ent.with_context(|| anyhow!("failed to read a dir entry in overlay repo path"))?;
 
                             let file_name = ent.file_name();
                             let file_name = file_name.to_str().context("file name is not convertible to UTF-8")
@@ -159,7 +159,7 @@ mod run_state {
 
                             if !ent.path().is_dir() {
                                 log::warn!(
-                                    "skipping global repo dir item {:?}, which does not appear to be a directory",
+                                    "skipping overlay repo dir item {:?}, which does not appear to be a directory",
                                     file_name,
                                 );
                                 return Ok(None);
@@ -170,8 +170,8 @@ mod run_state {
                     }).try_for_each(|ent| {
                         match ent {
                             Ok(repo_name) => {
-                                let repo = RepoEntry { kind: RepoEntryKind::Global {} };
-                                log::trace!("found global repo {:?}", repo_name);
+                                let repo = RepoEntry { kind: RepoEntryKind::Overlay {} };
+                                log::trace!("found overlay repo {:?}", repo_name);
                                 if let Some(first_repo) = repos.get(&repo_name) {
                                     bail!(
                                         "repo name conflict: repo name {:?} found as both:\n1. {}\n2. {}",
@@ -211,7 +211,7 @@ mod run_state {
                             } = self;
 
                             let (name, source, kind, repo_kind) = match sub {
-                                RepoAddSubcommand::Local { path, name } => {
+                                RepoAddSubcommand::Standalone { path, name } => {
                                     let path = if path.is_absolute() {
                                         path.into()
                                     } else {
@@ -235,14 +235,14 @@ mod run_state {
                                     (
                                         name,
                                         None,
-                                        RepoEntryKind::Local { repo_path: path },
+                                        RepoEntryKind::Standalone { repo_path: path },
                                         GitRepoKind::Normal,
                                     )
                                 }
-                                RepoAddSubcommand::Global { name, source } => (
+                                RepoAddSubcommand::Overlay { name, source } => (
                                     name,
                                     Some(source),
-                                    RepoEntryKind::Global {},
+                                    RepoEntryKind::Overlay {},
                                     GitRepoKind::Bare,
                                 ),
                             };
@@ -375,7 +375,7 @@ mod run_state {
 
                             if !no_delete {
                                 match repo.kind() {
-                                    CliRepoKind::Global => {
+                                    CliRepoKind::Overlay => {
                                         let cwd = current_dir().context(
                                             "failed to copy current working directory path",
                                         )?;
@@ -399,7 +399,7 @@ mod run_state {
                                         }
                                         set_current_dir(cwd).context("failed to switch back to original working directory path")?;
                                     }
-                                    CliRepoKind::Local => (), // deleting the folder should suffice
+                                    CliRepoKind::Standalone => (), // deleting the folder should suffice
                                 }
                                 let repo_path = repo.path(dirs, repo_name)?;
                                 remove_dir_all(&repo_path).with_context(|| {
@@ -444,10 +444,10 @@ mod run_state {
                                         .filter(|repo| repo_spec.matches(*repo))
                                         .filter(|(_name, repo)| repo.kind() == repo_kind)
                                         .for_each(|(name, repo)| match repo_kind {
-                                            CliRepoKind::Global => {
+                                            CliRepoKind::Overlay => {
                                                 println!("  {}", name);
                                             }
-                                            CliRepoKind::Local => {
+                                            CliRepoKind::Standalone => {
                                                 println!(
                                                     "  {}: {}",
                                                     name,
@@ -478,35 +478,35 @@ mod run_state {
                 return Ok(());
             }
 
-            let local_repos = repos
+            let standalone_repos = repos
                 .iter()
                 .filter_map(|(name, entry)| {
                     let RepoEntry { kind } = entry.to_borrowed();
                     match kind {
-                        RepoEntryKind::Local { repo_path } => {
-                            Some((name.to_borrowed(), LocalRepoEntry { path: repo_path }))
+                        RepoEntryKind::Standalone { repo_path } => {
+                            Some((name.to_borrowed(), StandaloneRepoEntry { path: repo_path }))
                         }
-                        RepoEntryKind::Global { .. } => None,
+                        RepoEntryKind::Overlay { .. } => None,
                     }
                 })
                 .collect();
 
-            let local_repos_db = LocalRepoDatabase { local_repos };
+            let standalone_repos_db = StandaloneRepoDatabase { standalone_repos };
 
-            let toml = toml::to_string(&local_repos_db)
-                .expect("failed to serialize local repos DB as TOML");
-            fs::write(dirs.local_repo_db_path()?, &toml).context("failed to write local repos DB")
+            let toml = toml::to_string(&standalone_repos_db)
+                .expect("failed to serialize standalone repos DB as TOML");
+            fs::write(dirs.standalone_repo_db_path()?, &toml).context("failed to write standalone repos DB")
         }
     }
 
     #[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-    struct LocalRepoDatabase<'a> {
+    struct StandaloneRepoDatabase<'a> {
         #[serde(borrow)]
-        local_repos: BTreeMap<RepoName<'a>, LocalRepoEntry<'a>>,
+        standalone_repos: BTreeMap<RepoName<'a>, StandaloneRepoEntry<'a>>,
     }
 
     #[derive(Debug, Deserialize, Eq, IntoStatic, Ord, PartialEq, PartialOrd, Serialize)]
-    struct LocalRepoEntry<'a> {
+    struct StandaloneRepoEntry<'a> {
         #[serde(borrow)]
         path: Cow<'a, Path>,
     }
@@ -623,11 +623,11 @@ mod run_state {
             let Self { kind } = self;
             lazy_format!(move |f| {
                 match kind {
-                    RepoEntryKind::Local { repo_path } => {
-                        write!(f, "local repo at {}", repo_path.display())
+                    RepoEntryKind::Standalone { repo_path } => {
+                        write!(f, "standalone repo at {}", repo_path.display())
                     }
-                    RepoEntryKind::Global {} => {
-                        write!(f, "global repo")
+                    RepoEntryKind::Overlay {} => {
+                        write!(f, "overlay repo")
                     }
                 }
             })
@@ -644,10 +644,10 @@ mod run_state {
             let repo_path = kind.path(dirs, name.to_borrowed())?;
             let work_tree_path;
             let options = match kind {
-                RepoEntryKind::Local { .. } => OpenRepoOptions::Normal {
+                RepoEntryKind::Standalone { .. } => OpenRepoOptions::Normal {
                     work_tree_path: &*repo_path,
                 },
-                RepoEntryKind::Global { .. } => {
+                RepoEntryKind::Overlay { .. } => {
                     work_tree_path = kind.work_tree_path(dirs)?;
                     OpenRepoOptions::Bare {
                         repo_path: &*repo_path,
@@ -672,28 +672,28 @@ mod run_state {
             name: RepoName<'_>,
         ) -> anyhow::Result<Cow<'_, Path>> {
             Ok(match self {
-                Self::Global {} => Self::global_path(dirs, name)?.into(),
-                Self::Local { repo_path } => repo_path.to_borrowed(),
+                Self::Overlay {} => Self::overlay_path(dirs, name)?.into(),
+                Self::Standalone { repo_path } => repo_path.to_borrowed(),
             })
         }
 
         pub fn work_tree_path(&self, dirs: &Directories) -> anyhow::Result<Cow<'_, Path>> {
             match self {
-                Self::Global {} => dirs.home_dir_path().map(Into::into),
-                Self::Local { repo_path } => Ok(repo_path.to_borrowed()),
+                Self::Overlay {} => dirs.home_dir_path().map(Into::into),
+                Self::Standalone { repo_path } => Ok(repo_path.to_borrowed()),
             }
         }
 
-        fn global_path(dirs: &Directories, name: RepoName<'_>) -> anyhow::Result<PathBuf> {
-            let mut path = dirs.global_repos_dir_path()?;
+        fn overlay_path(dirs: &Directories, name: RepoName<'_>) -> anyhow::Result<PathBuf> {
+            let mut path = dirs.overlay_repos_dir_path()?;
             path.push(name.as_single_path_segment());
             Ok(path)
         }
 
         pub fn kind(&self) -> CliRepoKind {
             match self {
-                Self::Local { .. } => CliRepoKind::Local,
-                Self::Global { .. } => CliRepoKind::Global,
+                Self::Standalone { .. } => CliRepoKind::Standalone,
+                Self::Overlay { .. } => CliRepoKind::Overlay,
             }
         }
     }
@@ -701,9 +701,9 @@ mod run_state {
     #[derive(Debug, ToBorrowed)]
     pub enum RepoEntryKind<'a> {
         /// A bare repository with a work tree in the user's home directory, set up by this tool.
-        Global {},
+        Overlay {},
         /// A whole (non-bare) Git repo located at `repo_path`.
-        Local { repo_path: Cow<'a, Path> },
+        Standalone { repo_path: Cow<'a, Path> },
     }
 
     #[derive(
