@@ -1,3 +1,4 @@
+use lifetime::{IntoStatic, ToBorrowed};
 use std::{
     borrow::Cow,
     convert::Infallible,
@@ -23,6 +24,8 @@ where
         repo_kind: GitRepoKind,
     ) -> Result<Result<(), GitExistCheckFailure>, GitExistError>;
 
+    fn init(&self, path: &Path, repo_kind: GitRepoKind) -> Result<(), GitInitError>;
+
     fn clone(
         &self,
         path: &Path,
@@ -38,6 +41,8 @@ pub trait GitRepoTrait {
 
     fn run_cmd<T>(&self, cmd: Command, f: impl FnOnce(Command) -> T) -> T;
     fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError>;
+    fn set_attributes_file(&mut self, path: Option<&Path>)
+        -> Result<(), GitSetAttributesFileError>;
     fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError>;
 }
 
@@ -70,6 +75,12 @@ impl GitTrait for DynGit {
     ) -> Result<Result<(), GitExistCheckFailure>, GitExistError> {
         match self {
             Self::Cli(cli) => cli.exists(path, repo_kind),
+        }
+    }
+
+    fn init(&self, path: &Path, repo_kind: GitRepoKind) -> Result<(), GitInitError> {
+        match self {
+            Self::Cli(cli) => cli.init(path, repo_kind),
         }
     }
 
@@ -106,6 +117,15 @@ impl GitRepoTrait for DynGitRepo {
         }
     }
 
+    fn set_attributes_file(
+        &mut self,
+        path: Option<&Path>,
+    ) -> Result<(), GitSetAttributesFileError> {
+        match self {
+            Self::Cli(cli) => cli.set_attributes_file(path),
+        }
+    }
+
     fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError> {
         match self {
             Self::Cli(cli) => cli.list_files(),
@@ -113,7 +133,7 @@ impl GitRepoTrait for DynGitRepo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ToBorrowed, IntoStatic)]
 pub struct RepoSource<'a>(Cow<'a, str>);
 
 impl AsRef<OsStr> for RepoSource<'_> {
@@ -154,6 +174,14 @@ pub enum GitRepoKind {
 
 #[derive(Debug, ThisError)]
 #[error("failed to clone Git repo from {source:?} into {}: {op}", path.display())]
+pub struct GitInitError {
+    op: Cow<'static, str>,
+    path: PathBuf,
+    source: Option<anyhow::Error>,
+}
+
+#[derive(Debug, ThisError)]
+#[error("failed to clone Git repo from {source:?} into {}: {op}", path.display())]
 pub struct GitCloneError {
     op: Cow<'static, str>,
     path: PathBuf,
@@ -165,6 +193,12 @@ const EXCLUDES_FILE_CONFIG_PATH: &str = "core.excludesFile";
 #[derive(Debug, ThisError)]
 #[error("failed to set `{}` config", EXCLUDES_FILE_CONFIG_PATH)]
 pub struct GitSetExcludeFileError(#[from] anyhow::Error);
+
+const ATTRIBUTES_FILE_CONFIG_PATH: &str = "core.attributesFile";
+
+#[derive(Debug, ThisError)]
+#[error("failed to set `{}` config", ATTRIBUTES_FILE_CONFIG_PATH)]
+pub struct GitSetAttributesFileError(#[from] anyhow::Error);
 
 #[derive(Debug, ThisError)]
 #[error("failed to open repo at {}", path.display())]
@@ -188,10 +222,12 @@ fn prep_cmd<'a>(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Pat
 
 mod cli {
     use super::{
-        prep_cmd, GitCloneError, GitExistCheckFailure, GitExistError, GitListFilesError,
-        GitRepoKind, GitRepoTrait, GitSetExcludeFileError, GitTrait, OpenRepoError,
-        OpenRepoOptions, RepoSource, EXCLUDES_FILE_CONFIG_PATH,
+        prep_cmd, GitCloneError, GitExistCheckFailure, GitExistError, GitInitError,
+        GitListFilesError, GitRepoKind, GitRepoTrait, GitSetExcludeFileError, GitTrait,
+        OpenRepoError, OpenRepoOptions, RepoSource, ATTRIBUTES_FILE_CONFIG_PATH,
+        EXCLUDES_FILE_CONFIG_PATH,
     };
+    use crate::runner::dirs::{current_dir, set_current_dir};
     use anyhow::{anyhow, ensure, Context};
     use std::{
         borrow::Cow,
@@ -306,6 +342,32 @@ mod cli {
             })
         }
 
+        fn init(&self, path: &Path, repo_kind: GitRepoKind) -> Result<(), super::GitInitError> {
+            let err = |op, source| GitInitError {
+                op,
+                path: path.to_owned(),
+                source,
+            };
+            let mut git_cmd = Command::new("git");
+            git_cmd.args::<_, &OsStr>(["init".as_ref(), path.as_ref()]);
+            match repo_kind {
+                GitRepoKind::Normal => (),
+                GitRepoKind::Bare => {
+                    git_cmd.arg("--bare");
+                }
+            }
+
+            let status = git_cmd
+                .status()
+                .map_err(|e| err("spawn command".into(), Some(anyhow::Error::new(e))))?;
+
+            if let Some(err_msg) = Self::cmd_failure_err(status) {
+                Err(err(err_msg, None))
+            } else {
+                Ok(())
+            }
+        }
+
         fn clone(
             &self,
             path: &Path,
@@ -373,6 +435,25 @@ mod cli {
         fn git_cmd() -> Command {
             Command::new("git")
         }
+
+        fn config_set(&self, path: &str, value: Option<impl AsRef<OsStr>>) -> anyhow::Result<()> {
+            let mut cmd = Self::git_cmd();
+            cmd.arg("config");
+            if let Some(value) = value {
+                cmd.args(["set", path]);
+                cmd.arg(value);
+            } else {
+                cmd.args(["--unset", path]);
+            }
+
+            let exit_status = self
+                .run_cmd(cmd, |mut cmd| cmd.status())
+                .context("failed to spawn command")?;
+            if !exit_status.success() {
+                return Err(anyhow!("command did not exit successfully").into());
+            }
+            Ok(())
+        }
     }
 
     impl GitRepoTrait for GitCliRepo {
@@ -388,28 +469,22 @@ mod cli {
         }
 
         fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError> {
-            let mut cmd = Self::git_cmd();
-            cmd.arg("config");
-            if let Some(path) = path {
-                cmd.args(["set", "core.excludesFile", EXCLUDES_FILE_CONFIG_PATH]);
-                cmd.arg(path);
-            } else {
-                cmd.args(["--unset", EXCLUDES_FILE_CONFIG_PATH]);
-            }
+            Ok(self.config_set(EXCLUDES_FILE_CONFIG_PATH, path)?)
+        }
 
-            let exit_status = self
-                .run_cmd(cmd, |mut cmd| cmd.status())
-                .context("failed to spawn command")?;
-            if !exit_status.success() {
-                return Err(anyhow!("command did not exit successfully").into());
-            }
-            Ok(())
+        fn set_attributes_file(
+            &mut self,
+            path: Option<&Path>,
+        ) -> Result<(), super::GitSetAttributesFileError> {
+            Ok(self.config_set(ATTRIBUTES_FILE_CONFIG_PATH, path)?)
         }
 
         fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError> {
             let mut cmd = Command::new("git");
             cmd.arg("ls-files").stderr(Stdio::inherit());
             (|| {
+                let cwd = current_dir()?;
+
                 let Output {
                     status,
                     stdout,
@@ -419,13 +494,19 @@ mod cli {
                     .context("failed to spawn file listing command")
                     .map_err(|source| GitListFilesError { source })?;
                 ensure!(status.success(), "command did not exit with 0");
+
                 let files = BufRead::lines(Cursor::new(stdout))
                     .map(|l| {
                         l.context("failed to read line from output")
                             .map(|l| Path::new(&l).to_owned())
                     })
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(files.into_iter())
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter();
+
+                set_current_dir(&cwd)
+                    .context("failed to switch back to original working directory path")?;
+
+                Ok(files)
             })()
             .map(|i| -> Box<dyn Iterator<Item = PathBuf>> { Box::new(i) })
             .map_err(|source| GitListFilesError { source })
