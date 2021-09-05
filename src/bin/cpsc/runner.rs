@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     fmt::{self, Debug, Display, Formatter},
-    path::Path,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 use strum::IntoEnumIterator;
@@ -226,7 +226,7 @@ impl Runner {
                 };
 
                 let cmd_status = repo.run_cmd(cmd, |mut cmd| {
-                    log::info!("running command {:?}", cmd);
+                    log::debug!("running command {:?}", cmd);
                     let status = cmd.status().context("failed to spawn command");
                     status
                 })?;
@@ -363,4 +363,9 @@ impl Display for RemoteName<'_> {
         let Self(inner) = self;
         Display::fmt(inner, f)
     }
+}
+
+fn canonicalize_path(path: &Path) -> anyhow::Result<PathBuf> {
+    dunce::canonicalize(&path)
+        .with_context(|| anyhow!("failed to canonicalize relative path {:?}", path))
 }

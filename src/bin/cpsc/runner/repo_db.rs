@@ -1,8 +1,11 @@
-use super::{
-    dirs::Directories,
-    git::{DynGit, DynGitRepo, GitRepoTrait, GitTrait, OpenRepoOptions, RepoSource},
+use crate::{
+    cli::CliRepoKind,
+    runner::{
+        canonicalize_path,
+        dirs::Directories,
+        git::{DynGit, DynGitRepo, GitRepoTrait, GitTrait, OpenRepoOptions, RepoSource},
+    },
 };
-use crate::cli::CliRepoKind;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use format::lazy_format;
 use lifetime::{IntoStatic, ToBorrowed};
@@ -196,9 +199,9 @@ impl RepoEntry<'_> {
 
 #[derive(Debug, IntoStatic, ToBorrowed)]
 enum RepoEntryKind<'a> {
-    /// A bare repository with a work tree in the user's home directory, set up by this tool.
+    /// A bare Git repository with a work tree in the user's home directory, set up by this tool.
     Overlay {},
-    /// A whole (non-bare) Git repo located at `repo_path`.
+    /// A whole (non-bare) Git repository located at `repo_path`.
     Standalone {
         path: Cow<'a, Path>,
         app_info: Option<AppInfo<'a>>,
@@ -377,7 +380,7 @@ impl RepoDb {
             // `dunce` if at all possible.
             //
             // [reasons]: https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=cmd
-            let path = Self::canonicalize_path(path)?.into();
+            let path = canonicalize_path(path)?.into();
 
             // TODO: Check that repo path isn't inside our data dir
 
@@ -477,14 +480,16 @@ impl RepoDb {
                 })
             };
             if names_match || paths_match {
+                // TODO: These diagnostics should probably live in `runner`. Let's audit diagnostic
+                // locations after we get things working.
                 if names_match && paths_match {
                     bail!(
-                            "repository {:?} is already added; did you accidentally repeat this command?",
-                            other_name,
-                        );
+                        "repo {:?} is already added; did you accidentally repeat a command?",
+                        other_name,
+                    );
                 } else {
                     bail!(
-                        "a repository with the name {:?} already exists as a {}",
+                        "a repo with the name {:?} already exists as a {}",
                         other_name,
                         repo.short_desc(),
                     );
@@ -534,7 +539,7 @@ impl RepoDb {
         path: &Path,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
         // TODO: lint/check for canonicalized paths on init
-        let path = Self::canonicalize_path(path)?;
+        let path = canonicalize_path(path)?;
         for (name, repo) in self.iter() {
             let repo_path = repo.path(dirs, name.to_borrowed())?;
             if path == repo_path {
@@ -545,11 +550,6 @@ impl RepoDb {
             "{:?} is not a path associated with any repo in the current configuration",
             path,
         );
-    }
-
-    fn canonicalize_path(path: &Path) -> anyhow::Result<PathBuf> {
-        dunce::canonicalize(&path)
-            .with_context(|| anyhow!("failed to canonicalize relative path {:?}", path))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (RepoName<'_>, RepoEntry<'_>)> {
@@ -648,7 +648,7 @@ impl RepoDb {
                 {
                     Ok(files) => {
                         for file in files {
-                            log::info!("removing {}", file.display());
+                            log::debug!("removing {}", file.display());
                             match remove_file(&file) {
                                 Ok(()) => (),
                                 Err(e) => {

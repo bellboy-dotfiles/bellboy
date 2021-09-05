@@ -227,7 +227,10 @@ mod cli {
         OpenRepoError, OpenRepoOptions, RepoSource, ATTRIBUTES_FILE_CONFIG_PATH,
         EXCLUDES_FILE_CONFIG_PATH,
     };
-    use crate::runner::dirs::{current_dir, set_current_dir};
+    use crate::runner::{
+        canonicalize_path,
+        dirs::{current_dir, set_current_dir},
+    };
     use anyhow::{anyhow, ensure, Context};
     use std::{
         borrow::Cow,
@@ -438,12 +441,12 @@ mod cli {
 
         fn config_set(&self, path: &str, value: Option<impl AsRef<OsStr>>) -> anyhow::Result<()> {
             let mut cmd = Self::git_cmd();
-            cmd.arg("config");
+            cmd.args(["config", path]);
             if let Some(value) = value {
-                cmd.args(["set", path]);
+                // TODO: How to prevent something dumb like an option injection here?
                 cmd.arg(value);
             } else {
-                cmd.args(["--unset", path]);
+                cmd.arg("--unset-all");
             }
 
             let exit_status = self
@@ -485,6 +488,9 @@ mod cli {
             (|| {
                 let cwd = current_dir()?;
 
+                set_current_dir(&self.work_tree_path)
+                    .context("failed to change working directory to work tree")?;
+
                 let Output {
                     status,
                     stdout,
@@ -498,13 +504,14 @@ mod cli {
                 let files = BufRead::lines(Cursor::new(stdout))
                     .map(|l| {
                         l.context("failed to read line from output")
-                            .map(|l| Path::new(&l).to_owned())
+                            .and_then(|l| canonicalize_path(Path::new(&l)))
                     })
                     .collect::<Result<Vec<_>, _>>()?
                     .into_iter();
 
                 set_current_dir(&cwd)
-                    .context("failed to switch back to original working directory path")?;
+                    .context("failed to switch back to original working directory path")
+                    .unwrap(); // there's nothing sensible a client could do here, so get outta here
 
                 Ok(files)
             })()
