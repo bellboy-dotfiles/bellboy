@@ -370,21 +370,17 @@ impl RepoDb {
         options: NewStandaloneOptions<'_>,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
         let repo = |path: &Path| -> anyhow::Result<_> {
-            let path = if path.is_absolute() {
-                path.to_path_buf().into()
-            } else {
-                // Git doesn't understand UNC paths, which is what
-                // `std::fs::canonicalize` converts paths to on Windows.
-                // There's [reasons] for `std` to do this, but in our
-                // context, this is undesirable. Try to avoid this using
-                // `dunce` if at all possible.
-                //
-                // [reasons]: https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=cmd
-                dunce::canonicalize(&path)
-                    .with_context(|| anyhow!("failed to canonicalize relative path {:?}", path))?
-                    .into()
-            };
+            // Git doesn't understand UNC paths, which is what
+            // `std::fs::canonicalize` converts paths to on Windows.
+            // There's [reasons] for `std` to do this, but in our
+            // context, this is undesirable. Try to avoid this using
+            // `dunce` if at all possible.
+            //
+            // [reasons]: https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=cmd
+            let path = Self::canonicalize_path(path)?.into();
+
             // TODO: Check that repo path isn't inside our data dir
+
             Ok(RepoEntry {
                 kind: RepoEntryKind::Standalone { path, app_info },
             })
@@ -509,14 +505,14 @@ impl RepoDb {
                 .context("failed trying to check if Git repo is present at path")
         })?;
         check.context("Git repo check failed")?;
-        log::info!(
+        log::debug!(
             "validated that work tree exists as expected for {}",
             repo.short_desc()
         );
         Ok(())
     }
 
-    pub fn get_opt(&self, name: RepoName<'_>) -> Option<RepoEntry<'_>> {
+    pub fn get_by_name_opt(&self, name: RepoName<'_>) -> Option<RepoEntry<'_>> {
         // SAFETY: Safe because we're only using this reference in this call -- no lifetime
         // escaping here.
         {
@@ -527,9 +523,33 @@ impl RepoDb {
         .map(|e| e.to_borrowed())
     }
 
-    pub fn get(&self, name: RepoName<'_>) -> anyhow::Result<RepoEntry<'_>> {
-        self.get_opt(name.to_borrowed())
+    pub fn get_by_name(&self, name: RepoName<'_>) -> anyhow::Result<RepoEntry<'_>> {
+        self.get_by_name_opt(name.to_borrowed())
             .with_context(|| anyhow!("{:?} is not a repo name in the current configuration", name))
+    }
+
+    pub fn get_by_path(
+        &self,
+        dirs: &Directories,
+        path: &Path,
+    ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
+        // TODO: lint/check for canonicalized paths on init
+        let path = Self::canonicalize_path(path)?;
+        for (name, repo) in self.iter() {
+            let repo_path = repo.path(dirs, name.to_borrowed())?;
+            if path == repo_path {
+                return Ok((name, repo));
+            }
+        }
+        bail!(
+            "{:?} is not a path associated with any repo in the current configuration",
+            path,
+        );
+    }
+
+    fn canonicalize_path(path: &Path) -> anyhow::Result<PathBuf> {
+        dunce::canonicalize(&path)
+            .with_context(|| anyhow!("failed to canonicalize relative path {:?}", path))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (RepoName<'_>, RepoEntry<'_>)> {
@@ -579,7 +599,7 @@ impl RepoDb {
         name: RepoName<'_>,
     ) -> anyhow::Result<()> {
         ensure!(
-            self.get(name.to_borrowed())?.kind() == CliRepoKind::Overlay,
+            self.get_by_name(name.to_borrowed())?.kind() == CliRepoKind::Overlay,
             "repo is not an overlay repo"
         );
 
@@ -596,7 +616,7 @@ impl RepoDb {
         name: RepoName<'_>,
     ) -> anyhow::Result<RepoEntry<'static>> {
         ensure!(
-            self.get(name.to_borrowed())?.kind() == CliRepoKind::Standalone,
+            self.get_by_name(name.to_borrowed())?.kind() == CliRepoKind::Standalone,
             "repo is not an standalone repo"
         );
         Ok(self.remove(name).unwrap())

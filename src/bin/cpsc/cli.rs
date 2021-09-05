@@ -60,13 +60,14 @@ pub(crate) enum Cli {
     //     #[clap(long)]
     //     cd: bool,
     // },
+    /// Lists repo entries in the current configuration.
+    ///
+    /// TODO: document repo spec and format options.
     List {
-        #[clap(long, default_value = "all")]
-        repo_spec: RepoSpec,
-        #[clap(long, default_value = "name")]
-        by: ListBy,
-        #[clap(long, conflicts_with = "by")]
-        as_starter: bool,
+        #[clap(default_value = "all")]
+        repo_spec: Vec<RepoSpec>,
+        #[clap(long, default_value = "flat")]
+        format: ListFormat,
     },
     // // TODO: Might be nice to give a condensed presentation of files listed by `git status`?
     // Status,
@@ -145,32 +146,32 @@ impl FromStr for RepoSpec {
 }
 
 #[derive(Debug)]
-pub enum ListBy {
-    Name,
-    Kind,
+pub enum ListFormat {
+    Flat,
+    GroupByKind,
 }
 
-impl Default for ListBy {
+impl Default for ListFormat {
     fn default() -> Self {
-        Self::Name
+        Self::Flat
     }
 }
 
 #[derive(Debug, ThisError)]
-#[error("invalid `by` spec; expected \"name\" or \"kind\", got {actual:?}")]
-pub struct InvalidListByError {
+#[error("invalid `by` spec; expected \"flat\", or \"group-by-kind\", but got {actual:?}")]
+pub struct InvalidListFormatError {
     actual: String,
 }
 
-impl FromStr for ListBy {
-    type Err = InvalidListByError;
+impl FromStr for ListFormat {
+    type Err = InvalidListFormatError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "name" => Self::Name,
-            "kind" => Self::Kind,
+            "flat" => Self::Flat,
+            "group-by-kind" => Self::GroupByKind,
             actual => {
-                return Err(InvalidListByError {
+                return Err(InvalidListFormatError {
                     actual: actual.to_string(),
                 })
             }
@@ -207,7 +208,13 @@ pub enum StandaloneSubcommand {
     /// This subcommand makes no attempt to remove local files; it only removes this tool's
     /// awareness of them. If you also wish to remove all files, you may instead prefer to use the
     /// top-level `remove` subcommand.
-    Deregister { name: RepoName<'static> },
+    Deregister {
+        /// The repo to deregister. Interpreted as a path, unless `--name` is specified, in which
+        /// case this is interpreted as a repo name.
+        repo: Option<PathBuf>,
+        #[clap(long)]
+        name: bool,
+    },
     // // TODO:
     // SetProjectDetails
 }

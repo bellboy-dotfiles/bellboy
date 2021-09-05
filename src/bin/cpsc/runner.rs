@@ -4,11 +4,12 @@ use self::{
     repo_db::{NewStandaloneOptions, RepoDb, RepoEntry},
 };
 use crate::cli::{
-    Cli, CliNewRepoName, CliRepoKind, ListBy, OverlaySubcommand, RepoSpec, StandaloneSubcommand,
+    Cli, CliNewRepoName, CliRepoKind, ListFormat, OverlaySubcommand, RepoSpec, StandaloneSubcommand,
 };
 use anyhow::{anyhow, bail, Context};
 use format::lazy_format;
 use lifetime::{IntoStatic, ToBorrowed};
+use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -51,8 +52,15 @@ impl From<CliRepoKind> for GitRepoKind {
 
 impl CliNewRepoName {
     fn unwrap_or_base_name(self, path: &Path) -> anyhow::Result<RepoName<'static>> {
-        self.into_opt().map(Ok).unwrap_or_else(|| {
-            path.file_name()
+        self.into_opt().map(Ok).unwrap_or_else(move || {
+            let path_buf = if path.is_relative() {
+                current_dir()?.join(path).clean()
+            } else {
+                path.to_owned()
+            };
+            // TODO: Do some
+            path_buf
+                .file_name()
                 .with_context(|| anyhow!("no base name found for path {:?}", path))?
                 .to_str()
                 .context("base name is not UTF-8")
@@ -134,12 +142,24 @@ impl Runner {
                     log_registered(name, repo);
                     Ok(())
                 }
-                StandaloneSubcommand::Deregister { name } => {
+                StandaloneSubcommand::Deregister { repo, name } => {
                     let Self {
                         repos,
                         git: _,
-                        dirs: _,
+                        dirs,
                     } = self;
+
+                    // TODO: ensure `repo` is after `--name` for forwards compatibility
+                    let name = if name {
+                        repo.context("`--name` was specified without a value")?
+                            .to_str()
+                            .context("name was not UTF-8")?
+                            .parse::<RepoName<'static>>()?
+                    } else {
+                        let path = repo.map(Ok).unwrap_or_else(|| current_dir())?;
+                        let (name, _repo) = repos.get_by_path(dirs, &path)?;
+                        name.into_static()
+                    };
 
                     let repo = repos.deregister_standalone(name.to_borrowed())?;
                     log::info!(
@@ -185,16 +205,18 @@ impl Runner {
 
                 let mut cmd = cmd_and_args.to_std()?;
 
-                let repo = repos.get(repo_name.to_borrowed()).with_context(|| {
-                    anyhow!(
-                        concat!(
-                            "no repo configured with the name {:?} -- do you need to `",
-                            env!("CARGO_BIN_NAME"),
-                            " repo add`?",
-                        ),
-                        repo_name,
-                    )
-                })?;
+                let repo = repos
+                    .get_by_name(repo_name.to_borrowed())
+                    .with_context(|| {
+                        anyhow!(
+                            concat!(
+                                "no repo configured with the name {:?} -- do you need to `",
+                                env!("CARGO_BIN_NAME"),
+                                " repo add`?",
+                            ),
+                            repo_name,
+                        )
+                    })?;
 
                 let repo = {
                     if cd_root {
@@ -274,56 +296,48 @@ impl Runner {
                 repos.try_remove_entire_repo(dirs, git, name)?;
                 Ok(())
             }
-            Cli::List {
-                repo_spec,
-                by,
-                as_starter,
-            } => {
-                if as_starter {
-                    bail!("starters are not yet implemented; coming soon!")
-                } else {
-                    let Self {
-                        dirs,
-                        git: _, // TODO: diagnostics for broken stuff? :D
-                        repos,
-                    } = self;
-                    let matching_repos_iter = || {
-                        repos.iter().filter(|(name, repo)| {
-                            repo_spec.matches((name.to_borrowed(), repo.to_borrowed()))
-                        })
-                    };
-                    match by {
-                        ListBy::Name => {
-                            matching_repos_iter().for_each(|(name, repo)| {
-                                // TODO: Finalize this?
-                                println!("{:?}: {}", name, repo.short_desc());
-                            });
-                        }
-                        ListBy::Kind => {
-                            CliRepoKind::iter().for_each(|repo_kind| {
-                                // TODO: get casing right
-                                println!("{:?}", repo_kind);
-                                matching_repos_iter()
-                                    .filter(|(_name, repo)| repo.kind() == repo_kind)
-                                    .for_each(|(name, repo)| match repo_kind {
-                                        CliRepoKind::Overlay => {
-                                            println!("  {}", name);
-                                        }
-                                        CliRepoKind::Standalone => {
-                                            println!(
-                                                "  {}: {}",
-                                                name,
-                                                repo.path(dirs, name.to_borrowed())
-                                                    .unwrap()
-                                                    .display()
-                                            );
-                                        }
-                                    })
-                            });
-                        }
-                    };
-                    Ok(())
-                }
+            Cli::List { repo_spec, format } => {
+                let Self {
+                    dirs,
+                    git: _, // TODO: diagnostics for broken stuff? :D
+                    repos,
+                } = self;
+                let matching_repos_iter = || {
+                    repos.iter().filter(|(name, repo)| {
+                        repo_spec
+                            .iter()
+                            .all(|spec| spec.matches((name.to_borrowed(), repo.to_borrowed())))
+                    })
+                };
+                match format {
+                    ListFormat::Flat => {
+                        matching_repos_iter().for_each(|(name, repo)| {
+                            // TODO: Finalize this?
+                            println!("{:?}: {}", name, repo.short_desc());
+                        });
+                    }
+                    ListFormat::GroupByKind => {
+                        CliRepoKind::iter().for_each(|repo_kind| {
+                            // TODO: get casing right
+                            println!("{:?}", repo_kind);
+                            matching_repos_iter()
+                                .filter(|(_name, repo)| repo.kind() == repo_kind)
+                                .for_each(|(name, repo)| match repo_kind {
+                                    CliRepoKind::Overlay => {
+                                        println!("  {}", name);
+                                    }
+                                    CliRepoKind::Standalone => {
+                                        println!(
+                                            "  {}: {}",
+                                            name,
+                                            repo.path(dirs, name.to_borrowed()).unwrap().display()
+                                        );
+                                    }
+                                })
+                        });
+                    }
+                };
+                Ok(())
             }
         }
     }
