@@ -236,7 +236,7 @@ pub enum OverlaySubcommand {
     /// This subcommand makes no attempt to remove the work tree files associated with the
     /// specified repo; it only removes this tool's awareness of them. If you also wish to remove
     /// all files, you may instead prefer to use the top-level `remove` subcommand.
-    RemoveGit { name: RepoName<'static> },
+    RemoveBareRepo { name: RepoName<'static> },
 }
 
 #[derive(Clap, Debug)]

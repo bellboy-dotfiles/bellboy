@@ -165,7 +165,7 @@ impl Runner {
                     log_registered(name, repo);
                     Ok(())
                 }
-                OverlaySubcommand::RemoveGit { name } => {
+                OverlaySubcommand::RemoveBareRepo { name } => {
                     let Self {
                         dirs,
                         git: _,
