@@ -237,6 +237,11 @@ pub enum OverlaySubcommand {
         source: RepoSource<'static>,
         #[clap(flatten)]
         name: CliNewRepoName,
+        /// Disables population of the work tree (user home directory) after cloning the bare repo.
+        ///
+        /// Useful for recreating your overlay repo after calling `remove-bare-repo`.
+        #[clap(long)]
+        no_checkout: bool,
     },
     /// Removes the bare Git repo associated with an overlay repo.
     ///

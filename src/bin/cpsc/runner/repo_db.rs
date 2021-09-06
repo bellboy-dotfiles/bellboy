@@ -327,8 +327,8 @@ impl RepoDb {
         &mut self,
         dirs: &Directories,
         git: &DynGit,
-        name: RepoName<'static>,
-        clone_source: Option<RepoSource<'_>>,
+        name: RepoName<'_>,
+        options: NewOverlayOptions<'_>,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
         let repo = RepoEntry {
             kind: RepoEntryKind::Overlay {},
@@ -337,10 +337,30 @@ impl RepoDb {
         // // TODO: improve diagnostic for repo already existing
         // create_dir(&repo.path(dirs, name.to_borrowed())?) // TODO: revert creating this if something fails
         //     .context("failed to make clone target directory")?;
-        let (name, repo) = if let Some(source) = clone_source {
-            self.clone_new(dirs, git, name, repo, source.into_static())?
-        } else {
-            self.init_new(dirs, git, name, repo)?
+        let (name, repo) = match options {
+            NewOverlayOptions::Clone {
+                source,
+                no_checkout,
+            } => {
+                let (name, repo) =
+                    self.clone_new(dirs, git, name.into_static(), repo, source.into_static())?;
+                match repo
+                    .open(git, dirs, name.to_borrowed())
+                    .and_then(|mut repo| {
+                        repo.reset()
+                            .context("failed to execute reset staged changes")?;
+                        if !no_checkout {
+                            // TODO: check out files
+                            repo.restore().context("failed to populate work tree")?;
+                        }
+                        Ok(())
+                    }) {
+                    Ok(()) => (),
+                    Err(e) => log::warn!("{}", e),
+                };
+                (name, repo)
+            }
+            NewOverlayOptions::Init => self.init_new(dirs, git, name.into_static(), repo)?,
         };
 
         // Tweak bare repo for overlay
@@ -694,6 +714,15 @@ pub enum NewStandaloneOptions<'a> {
     Init,
     Clone { source: RepoSource<'a> },
     Register,
+}
+
+#[derive(Debug)]
+pub enum NewOverlayOptions<'a> {
+    Init,
+    Clone {
+        source: RepoSource<'a>,
+        no_checkout: bool,
+    },
 }
 
 #[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

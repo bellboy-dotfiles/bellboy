@@ -44,6 +44,8 @@ pub trait GitRepoTrait {
     fn set_attributes_file(&mut self, path: Option<&Path>)
         -> Result<(), GitSetAttributesFileError>;
     fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError>;
+    fn reset(&mut self) -> Result<(), GitResetError>;
+    fn restore(&mut self) -> Result<(), GitRestoreError>;
 }
 
 pub enum OpenRepoOptions<'a> {
@@ -56,6 +58,7 @@ pub enum OpenRepoOptions<'a> {
     },
 }
 
+// TODO: Consider using the `enum_dispatch` crate.
 #[derive(Debug)]
 pub enum DynGit {
     Cli(GitCli),
@@ -129,6 +132,18 @@ impl GitRepoTrait for DynGitRepo {
     fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError> {
         match self {
             Self::Cli(cli) => cli.list_files(),
+        }
+    }
+
+    fn reset(&mut self) -> Result<(), GitResetError> {
+        match self {
+            Self::Cli(cli) => cli.reset(),
+        }
+    }
+
+    fn restore(&mut self) -> Result<(), GitRestoreError> {
+        match self {
+            Self::Cli(cli) => cli.restore(),
         }
     }
 }
@@ -213,6 +228,20 @@ pub struct GitListFilesError {
     source: anyhow::Error,
 }
 
+#[derive(Debug, ThisError)]
+#[error("failed to discard staged changes")]
+pub struct GitResetError {
+    #[from]
+    source: anyhow::Error,
+}
+
+#[derive(Debug, ThisError)]
+#[error("failed to restore work tree")]
+pub struct GitRestoreError {
+    #[from]
+    source: anyhow::Error,
+}
+
 fn prep_cmd<'a>(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Path) {
     cmd.envs([
         ("GIT_WORK_TREE", (&*git_work_tree_path).as_os_str()),
@@ -223,21 +252,20 @@ fn prep_cmd<'a>(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Pat
 mod cli {
     use super::{
         prep_cmd, GitCloneError, GitExistCheckFailure, GitExistError, GitInitError,
-        GitListFilesError, GitRepoKind, GitRepoTrait, GitSetExcludeFileError, GitTrait,
-        OpenRepoError, OpenRepoOptions, RepoSource, ATTRIBUTES_FILE_CONFIG_PATH,
-        EXCLUDES_FILE_CONFIG_PATH,
+        GitListFilesError, GitRepoKind, GitRepoTrait, GitResetError, GitRestoreError,
+        GitSetExcludeFileError, GitTrait, OpenRepoError, OpenRepoOptions, RepoSource,
+        ATTRIBUTES_FILE_CONFIG_PATH, EXCLUDES_FILE_CONFIG_PATH,
     };
     use crate::runner::{
-        canonicalize_path,
+        canonicalize_path, cmd_failure_err, cmd_failure_res,
         dirs::{current_dir, set_current_dir},
     };
     use anyhow::{anyhow, ensure, Context};
     use std::{
-        borrow::Cow,
         ffi::OsStr,
         io::{BufRead, Cursor},
         path::{Path, PathBuf},
-        process::{Command, ExitStatus, Output, Stdio},
+        process::{Command, Output, Stdio},
     };
 
     // TODO: use `GIT_REFLOG_ACTION` for logging niceness
@@ -249,18 +277,6 @@ mod cli {
     pub struct GitCliRepo {
         work_tree_path: PathBuf,
         repo_path: PathBuf,
-    }
-
-    impl GitCli {
-        fn cmd_failure_err(status: ExitStatus) -> Option<Cow<'static, str>> {
-            match status.code() {
-                Some(0) => None,
-                Some(code) => {
-                    Some(format!("exited with exit status {}, see output above", code).into())
-                }
-                None => Some("command was terminated by a signal".into()),
-            }
-        }
     }
 
     impl GitTrait for GitCli {
@@ -312,8 +328,7 @@ mod cli {
                 if status.code() == Some(128) && stderr.find("not a git repository").is_some() {
                     // TODO: how to make this `None` check more stable?
                     None
-                } else if let Some(err_msg) = Self::cmd_failure_err(status) {
-                    eprintln!("{}", stderr);
+                } else if let Some(err_msg) = cmd_failure_err(status) {
                     return Err(err(err_msg, None));
                 } else {
                     let found = parse_std("stdout", stdout)?
@@ -364,7 +379,7 @@ mod cli {
                 .status()
                 .map_err(|e| err("spawn command".into(), Some(anyhow::Error::new(e))))?;
 
-            if let Some(err_msg) = Self::cmd_failure_err(status) {
+            if let Some(err_msg) = cmd_failure_err(status) {
                 Err(err(err_msg, None))
             } else {
                 Ok(())
@@ -396,7 +411,7 @@ mod cli {
                 .status()
                 .map_err(|e| err("spawn command".into(), Some(anyhow::Error::new(e))))?;
 
-            if let Some(err_msg) = Self::cmd_failure_err(status) {
+            if let Some(err_msg) = cmd_failure_err(status) {
                 Err(err(err_msg, None))
             } else {
                 Ok(())
@@ -517,6 +532,24 @@ mod cli {
             })()
             .map(|i| -> Box<dyn Iterator<Item = PathBuf>> { Box::new(i) })
             .map_err(|source| GitListFilesError { source })
+        }
+
+        fn reset(&mut self) -> Result<(), GitResetError> {
+            let mut cmd = Command::new("git");
+            cmd.arg("reset");
+            Ok(self
+                .run_cmd(cmd, |mut cmd| cmd.status())
+                .map_err(anyhow::Error::new)
+                .and_then(cmd_failure_res)?)
+        }
+
+        fn restore(&mut self) -> Result<(), GitRestoreError> {
+            let mut cmd = Command::new("git");
+            cmd.arg("restore");
+            Ok(self
+                .run_cmd(cmd, |mut cmd| cmd.status())
+                .map_err(anyhow::Error::new)
+                .and_then(cmd_failure_res)?)
         }
     }
 }

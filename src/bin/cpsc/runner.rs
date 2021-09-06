@@ -1,7 +1,7 @@
 use self::{
     dirs::current_dir,
     git::{DynGit, GitCli, GitRepoKind, GitRepoTrait},
-    repo_db::{NewStandaloneOptions, RepoDb, RepoEntry},
+    repo_db::{NewOverlayOptions, NewStandaloneOptions, RepoDb, RepoEntry},
 };
 use crate::cli::{
     Cli, CliNewRepoName, CliRepoKind, ListFormat, OverlaySubcommand, RepoSpec, StandaloneSubcommand,
@@ -15,6 +15,7 @@ use std::{
     borrow::Cow,
     fmt::{self, Debug, Display, Formatter},
     path::{Path, PathBuf},
+    process::ExitStatus,
     str::FromStr,
 };
 use strum::IntoEnumIterator;
@@ -103,7 +104,7 @@ impl Runner {
                     log_registered(name, repo);
                     Ok(())
                 }
-                StandaloneSubcommand::Clone { source, path, name } => {
+                StandaloneSubcommand::Clone { name, path, source } => {
                     let Self { dirs, git, repos } = self;
                     let path = path.map(Ok).unwrap_or_else(|| -> anyhow::Result<_> {
                         let mut cwd = current_dir()?;
@@ -172,16 +173,29 @@ impl Runner {
             Cli::Overlay(subcmd) => match subcmd {
                 OverlaySubcommand::Init { name } => {
                     let Self { dirs, git, repos } = self;
-                    let (name, repo) = repos.new_overlay(dirs, git, name, None)?;
+                    let (name, repo) =
+                        repos.new_overlay(dirs, git, name, NewOverlayOptions::Init)?;
                     log_registered(name, repo);
                     Ok(())
                 }
-                OverlaySubcommand::Clone { source, name } => {
+                OverlaySubcommand::Clone {
+                    name,
+                    no_checkout,
+                    source,
+                } => {
                     let Self { dirs, git, repos } = self;
                     let name = name.into_opt().map(Ok).unwrap_or_else(|| -> anyhow::Result<_> {
                         todo!("still haven't implemented getting a base name from the repo source")
                     })?;
-                    let (name, repo) = repos.new_overlay(dirs, git, name, Some(source))?;
+                    let (name, repo) = repos.new_overlay(
+                        dirs,
+                        git,
+                        name,
+                        NewOverlayOptions::Clone {
+                            source,
+                            no_checkout,
+                        },
+                    )?;
                     log_registered(name, repo);
                     Ok(())
                 }
@@ -368,4 +382,20 @@ impl Display for RemoteName<'_> {
 fn canonicalize_path(path: &Path) -> anyhow::Result<PathBuf> {
     dunce::canonicalize(&path)
         .with_context(|| anyhow!("failed to canonicalize relative path {:?}", path))
+}
+
+fn cmd_failure_res(status: ExitStatus) -> anyhow::Result<()> {
+    if let Some(err_msg) = cmd_failure_err(status) {
+        Err(anyhow::Error::msg(err_msg))
+    } else {
+        Ok(())
+    }
+}
+
+fn cmd_failure_err(status: ExitStatus) -> Option<Cow<'static, str>> {
+    match status.code() {
+        Some(0) => None,
+        Some(code) => Some(format!("exited with exit status {}, see output above", code).into()),
+        None => Some("command was terminated by a signal".into()),
+    }
 }
