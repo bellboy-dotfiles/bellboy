@@ -375,9 +375,11 @@ impl RepoDb {
             {
                 log::warn!("{}", e);
             }
+            // // TODO: set attributes file
             // if let Err(e) = repo.set_attributes_file(todo!()) {
             //     log::error!("{}", e);
             // }
+            // TODO: Looks like we need to set the remote, boo!
         }
 
         Ok((name, repo))
