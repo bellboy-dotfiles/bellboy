@@ -408,25 +408,29 @@ impl RepoDb {
                 kind: RepoEntryKind::Standalone { path, app_info },
             })
         };
+        let create_dir = |path: &Path| -> anyhow::Result<_> {
+            let path_parent_is_dir =
+                path.parent()
+                    .filter(|p| p != &Path::new(""))
+                    .map_or(Ok(true), |p| {
+                        p.metadata().map(|m| m.is_dir()).with_context(|| {
+                            anyhow!("failed to check if parent of {:?} exists", path)
+                        })
+                    })?;
+            if !path_parent_is_dir {
+                bail!("path parent is not a directory")
+            }
+            create_dir(&path).context("failed to create target directory")?;
+            Ok(())
+        };
         match options {
             NewStandaloneOptions::Init => {
+                create_dir(&path)?;
                 let repo = repo(&path)?;
                 Ok(self.init_new(dirs, git, name.into_static(), repo.into_static())?)
             }
             NewStandaloneOptions::Clone { source } => {
-                let path_parent_is_dir =
-                    path.parent()
-                        .filter(|p| p != &Path::new(""))
-                        .map_or(Ok(true), |p| {
-                            p.metadata().map(|m| m.is_dir()).with_context(|| {
-                                anyhow!("failed to check if parent of {:?} exists", path)
-                            })
-                        })?;
-                if !path_parent_is_dir {
-                    bail!("path parent is not a directory")
-                }
-                create_dir(&path).context("failed to make clone target directory")?;
-
+                create_dir(&path)?;
                 let repo = repo(&path)?;
                 Ok(self.clone_new(
                     dirs,
