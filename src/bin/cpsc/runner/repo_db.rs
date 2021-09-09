@@ -410,6 +410,7 @@ impl RepoDb {
                 kind: RepoEntryKind::Standalone { path, app_info },
             })
         };
+        // This could be necessary for canonicalizing stuff later, so do it ourselves.
         let create_dir = |path: &Path| -> anyhow::Result<_> {
             let path_parent_is_dir =
                 path.parent()
