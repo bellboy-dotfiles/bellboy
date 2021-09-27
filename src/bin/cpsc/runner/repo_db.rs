@@ -18,7 +18,7 @@ use std::{
     collections::BTreeMap,
     fmt::{self, Debug, Display, Formatter},
     fs::{self, create_dir, remove_file, OpenOptions},
-    io::{BufReader, Read},
+    io::{self, BufReader, Read},
     mem::transmute,
     ops::Deref,
     path::{Path, PathBuf},
@@ -423,7 +423,10 @@ impl RepoDb {
             if !path_parent_is_dir {
                 bail!("path parent is not a directory")
             }
-            create_dir(&path).context("failed to create target directory")?;
+            let res = create_dir(&path);
+            if matches!(&res, Err(e) if e.kind() != io::ErrorKind::AlreadyExists) {
+                res.context("failed to create target directory")?;
+            }
             Ok(())
         };
         match options {
