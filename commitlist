@@ -1,0 +1,10 @@
+- [ ] Rename `Git` to `GitTrait`, use `DynGit` structure
+- [ ] Add population of overlay repos to DB
+- [ ] Implement `add`
+- [ ] Implement `list`
+- [ ] Implement `run`
+	- [ ] Add `GitRepoTrait`, `GitTrait::Repository` type
+	- [ ] Add `run_cmd` to `GitRepoTrait`
+	- [ ] Rest of the owl
+- [ ] TODO: ruplacer --subvert runner runner
+- [ ] Move `runner` (by now `runner`) module to separate file.
