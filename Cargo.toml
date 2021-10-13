@@ -2,7 +2,7 @@
 description = "A repo manager that understands you."
 edition = "2018"
 homepage = "https://github.com/ErichDonGubler/capisco"
-license = "GPL-2.0"
+license = "GPL-3.0"
 name = "capisco"
 version = "0.1.0-pre"
 
