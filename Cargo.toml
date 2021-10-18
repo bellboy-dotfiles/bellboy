@@ -4,8 +4,24 @@ edition = "2018"
 homepage = "https://github.com/ErichDonGubler/capisco"
 license = "GPL-2.0"
 name = "capisco"
-version = "0.0.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version = "0.1.0-pre"
 
 [dependencies]
+anyhow = "1.0.42"
+clap = "3.0.0-beta.4"
+colog = "1.1"
+dirs = "3.0.2"
+dunce = "1.0.2"
+format = "0.2.4"
+lifetime = { version = "0.1.0", features = ["macros"] }
+log = "0.4.14"
+path-clean = "0.1.0"
+path-dsl = "0.6.1"
+remove_dir_all = "0.7.0"
+same-file = "1.0.6"
+serde = { version = "1.0.128", features = ["derive"] }
+strum = { version = "0.21.0", features = ["derive"] }
+thiserror = "1.0.26"
+toml = { version = "0.5.8" }
+url = "2.2.2"
+xdg = { version = "2.2.0", git = "https://github.com/ErichDonGubler/rust-xdg", branch = "windows-support" }
