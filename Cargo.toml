@@ -1,6 +1,6 @@
 [package]
 authors = ["Capisco maintainers <https://github.com/capisco-dotfiles/capisco/graphs/contributors>"]
-description = "A repo manager that understands you."
+description = "A cross-platform repo manager that understands you."
 edition = "2021"
 homepage = "https://github.com/ErichDonGubler/capisco"
 license = "GPL-3.0"
