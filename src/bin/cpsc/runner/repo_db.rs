@@ -138,7 +138,7 @@ impl<'a, 'de: 'a> Deserialize<'de> for RepoName<'a> {
         let s = Cow::<'de, str>::deserialize(deserializer)?;
         Self::validate(&s)
             .map(|()| Self(s))
-            .map_err(|e| D::Error::custom(e))
+            .map_err(D::Error::custom)
     }
 }
 
@@ -566,7 +566,7 @@ impl RepoDb {
         {
             let name = &name;
             let name = unsafe { transmute::<_, &RepoName<'static>>(name) };
-            self.repos.get(&name)
+            self.repos.get(name)
         }
         .map(|e| e.to_borrowed())
     }
@@ -725,7 +725,7 @@ impl RepoDb {
             // escaping here.
             let name = &name;
             let name = unsafe { transmute::<_, &RepoName<'static>>(name) };
-            repos.remove(&name)
+            repos.remove(name)
         };
         *needs_persist = true;
         removed
