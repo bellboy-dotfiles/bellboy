@@ -1,0 +1,12 @@
+name: CI
+on: [push]
+jobs:
+  cargo-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          components: rustfmt
+          profile: minimal
+          toolchain: stable
