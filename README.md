@@ -28,14 +28,16 @@ Ready to dive in deeper? You should try:
 
 ## Installation
 
-For now, you may build Capisco via [Cargo](https://doc.rust-lang.org/cargo/):
+Binary distributions for Windows 10, Mac, and Linux are available in the
+[releases page]. Your favorite package manager(s) are coming soon (see also
+[the roadmap](#roadmap))!
+
+An adventurous soul (or [potential contributor](#contributing)? 😍) may build
+Capisco via [Cargo](https://doc.rust-lang.org/cargo/):
 
 ```sh
 $ cargo install capisco
 ```
-
-Binary distributions in GitHub and your favorite package manager(s) are coming
-soon (see also [the roadmap](#roadmap))!
 
 ## Roadmap
 
