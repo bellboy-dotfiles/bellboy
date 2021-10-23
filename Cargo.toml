@@ -1,5 +1,7 @@
 [package]
 authors = ["Capisco maintainers <https://github.com/capisco-dotfiles/capisco/graphs/contributors>"]
+# NOTE: Keep this tagline in sync with the CLI "about" text and the package description in the
+# top-level `Cargo.toml` file of this repo.
 description = "A cross-platform repo manager that understands you."
 edition = "2021"
 homepage = "https://github.com/ErichDonGubler/capisco"

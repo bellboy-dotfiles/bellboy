@@ -1,5 +1,9 @@
 # Capisco 💡☝️
 
+<!--
+	NOTE: Keep this tagline in sync with the CLI "about" text and the package
+	description in the top-level `Cargo.toml` file of this repo.
+-->
 A cross-platform dotfiles manager that understands you.
 
 Capisco is a Git repository manager oriented towards cross-platform dotfiles.
