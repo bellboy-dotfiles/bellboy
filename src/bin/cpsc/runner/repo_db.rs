@@ -65,6 +65,19 @@ impl Debug for RepoName<'_> {
     }
 }
 
+impl PartialEq<RepoName<'_>> for str {
+    fn eq(&self, other: &RepoName<'_>) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<str> for RepoName<'_> {
+    fn eq(&self, other: &str) -> bool {
+        let Self(name) = self;
+        name == other
+    }
+}
+
 #[derive(Debug, ThisError)]
 pub enum InvalidRepoNameError {
     #[error(

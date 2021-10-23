@@ -12,12 +12,12 @@
 // You should have received a copy of the GNU General Public License along with Capisco.  If not,
 // see <https://www.gnu.org/licenses/>.
 use crate::runner::{git::RepoSource, RepoName};
-use clap::Clap;
+use clap::Parser;
 use std::{ffi::OsString, path::PathBuf, process::Command, str::FromStr};
 use strum::EnumIter;
 use thiserror::Error as ThisError;
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 #[clap(about, author, version)]
 pub(crate) enum Cli {
     /// Use a starter file to quickly import or export a configuration.
@@ -86,7 +86,7 @@ pub(crate) enum Cli {
     // Status,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub enum StarterSubcommand {
     /// Imports a starter file from `PATH`.
     Import {
@@ -99,7 +99,7 @@ pub enum StarterSubcommand {
     Export { path: PathBuf },
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub struct ListSubcommand {}
 
 #[derive(Debug)]
@@ -192,7 +192,7 @@ impl FromStr for ListFormat {
     }
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub enum StandaloneSubcommand {
     Init {
         path: Option<PathBuf>,
@@ -232,7 +232,7 @@ pub enum StandaloneSubcommand {
     // SetProjectDetails
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub enum OverlaySubcommand {
     Init {
         /// The alias by which this repo will be referred to when used later with this tool, if you
@@ -264,13 +264,26 @@ pub enum OverlaySubcommand {
     RemoveBareRepo { name: RepoName<'static> },
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub struct CliExistingRepoName {
     /// A repo name previously added to this tool's configuration.
     pub name: RepoName<'static>,
 }
 
-#[derive(Clap, Debug)]
+impl PartialEq<CliExistingRepoName> for str {
+    fn eq(&self, other: &CliExistingRepoName) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<str> for CliExistingRepoName {
+    fn eq(&self, other: &str) -> bool {
+        let Self { name } = self;
+        name == other
+    }
+}
+
+#[derive(Debug, Parser)]
 pub struct CliNewRepoName {
     /// The alias by which this repo will be referred to when used later with this tool, if you
     /// wish to override what would be inferred.
@@ -284,6 +297,19 @@ impl CliNewRepoName {
     pub fn into_opt(self) -> Option<RepoName<'static>> {
         let Self { name } = self;
         name
+    }
+}
+
+impl PartialEq<CliNewRepoName> for str {
+    fn eq(&self, other: &CliNewRepoName) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<str> for CliNewRepoName {
+    fn eq(&self, other: &str) -> bool {
+        let Self { name } = self;
+        name.as_ref().map_or(false, |n| n == other)
     }
 }
 
@@ -316,7 +342,7 @@ impl FromStr for CliRepoKind {
     }
 }
 
-#[derive(Clap, Clone, Debug)]
+#[derive(Parser, Clone, Debug)]
 pub struct CommandAndArgs {
     #[clap(raw(true))]
     cmd_and_args: Vec<OsString>,

@@ -16,7 +16,7 @@ use self::{
     runner::{Directories, Runner}, // TODO: rename to `runner`?
 };
 use anyhow::Context;
-use clap::Clap;
+use clap::Parser;
 
 mod cli;
 mod runner;
