@@ -25,4 +25,4 @@ strum = { version = "0.21.0", features = ["derive"] }
 thiserror = "1.0.26"
 toml = { version = "0.5.8" }
 url = "2.2.2"
-xdg = { version = "2.2.0", git = "https://github.com/ErichDonGubler/rust-xdg", branch = "windows-support" }
+xdg = { version = "2.4.0", git = "https://github.com/ErichDonGubler/rust-xdg", branch = "windows-support" }

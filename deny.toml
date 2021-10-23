@@ -1,0 +1,19 @@
+[licenses]
+allow = [
+	"Apache-2.0",
+	"BSD-2-Clause",
+	"CC0-1.0",
+	"LGPL-3.0",
+	"MIT",
+	"MPL-2.0",
+]
+exceptions = [
+	# This is us! We don't automatically `allow` GPL-3.0 by default because
+	# that requires some extra work to integrate correctly.
+	{ name = "capisco", allow = ["GPL-3.0"] },
+]
+
+[sources]
+allow-git = [
+	"https://github.com/ErichDonGubler/rust-xdg",
+]
