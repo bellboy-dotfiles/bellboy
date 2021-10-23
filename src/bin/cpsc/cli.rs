@@ -18,7 +18,7 @@ use strum::EnumIter;
 use thiserror::Error as ThisError;
 
 #[derive(Clap, Debug)]
-#[clap(about, author)]
+#[clap(about, author, version)]
 pub(crate) enum Cli {
     /// Use a starter file to quickly import or export a configuration.
     ///
