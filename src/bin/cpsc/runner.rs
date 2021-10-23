@@ -104,7 +104,7 @@ impl Runner {
             Cli::Standalone(subcmd) => match subcmd {
                 StandaloneSubcommand::Init { path, name } => {
                     let Self { dirs, git, repos } = self;
-                    let path = path.map(Ok).unwrap_or_else(|| current_dir())?;
+                    let path = path.map(Ok).unwrap_or_else(current_dir)?;
                     let name = name.unwrap_or_base_name(&path)?;
                     let (name, repo) = repos.new_standalone(
                         dirs,
@@ -142,7 +142,7 @@ impl Runner {
                 StandaloneSubcommand::Register { path, name } => {
                     let Self { repos, dirs, git } = self;
 
-                    let path = path.map(Ok).unwrap_or_else(|| current_dir())?;
+                    let path = path.map(Ok).unwrap_or_else(current_dir)?;
                     let name = name.unwrap_or_base_name(&path)?;
 
                     let (name, repo) = repos.new_standalone(
@@ -170,7 +170,7 @@ impl Runner {
                             .context("name was not UTF-8")?
                             .parse::<RepoName<'static>>()?
                     } else {
-                        let path = repo.map(Ok).unwrap_or_else(|| current_dir())?;
+                        let path = repo.map(Ok).unwrap_or_else(current_dir)?;
                         let (name, _repo) = repos.get_by_path(dirs, &path)?;
                         name.into_static()
                     };
@@ -254,8 +254,7 @@ impl Runner {
 
                 let cmd_status = repo.run_cmd(cmd, |mut cmd| {
                     log::debug!("running command {:?}", cmd);
-                    let status = cmd.status().context("failed to spawn command");
-                    status
+                    cmd.status().context("failed to spawn command")
                 })?;
 
                 let _our_exit_code = match cmd_status.code() {
@@ -279,6 +278,9 @@ impl Runner {
 
                 Ok(())
             }
+            // TODO: This `allow` is necessary, but `clippy` throws a false positive. We need
+            // to `collect` first in order to avoid borrowing `self` while iterating.
+            #[allow(clippy::needless_collect)]
             Cli::ForEach {
                 no_cd_root,
                 cmd_and_args,

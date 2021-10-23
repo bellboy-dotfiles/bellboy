@@ -255,7 +255,7 @@ pub struct GitRestoreError {
     source: anyhow::Error,
 }
 
-fn prep_cmd<'a>(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Path) {
+fn prep_cmd(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Path) {
     cmd.envs([
         ("GIT_WORK_TREE", (&*git_work_tree_path).as_os_str()),
         ("GIT_DIR", (&*git_dir_path).as_os_str()),
@@ -337,31 +337,30 @@ mod cli {
 
             let stderr = parse_std("stderr", stderr)?;
 
-            let actual =
-                if status.code() == Some(128) && stderr.find("not a git repository").is_some() {
-                    // TODO: how to make this `None` check more stable?
-                    None
-                } else if let Some(err_msg) = cmd_failure_err(status) {
-                    return Err(err(err_msg, None));
-                } else {
-                    let found = parse_std("stdout", stdout)?
-                        .trim()
-                        .parse::<bool>()
-                        .map(|b| {
-                            if b {
-                                GitRepoKind::Bare
-                            } else {
-                                GitRepoKind::Normal
-                            }
-                        })
-                        .map_err(|e| {
-                            err(
-                                "failed to parse `rev-parse` response as a boolean literal".into(),
-                                Some(anyhow::Error::new(e)),
-                            )
-                        })?;
-                    Some(found)
-                };
+            let actual = if status.code() == Some(128) && stderr.contains("not a git repository") {
+                // TODO: how to make this `None` check more stable?
+                None
+            } else if let Some(err_msg) = cmd_failure_err(status) {
+                return Err(err(err_msg, None));
+            } else {
+                let found = parse_std("stdout", stdout)?
+                    .trim()
+                    .parse::<bool>()
+                    .map(|b| {
+                        if b {
+                            GitRepoKind::Bare
+                        } else {
+                            GitRepoKind::Normal
+                        }
+                    })
+                    .map_err(|e| {
+                        err(
+                            "failed to parse `rev-parse` response as a boolean literal".into(),
+                            Some(anyhow::Error::new(e)),
+                        )
+                    })?;
+                Some(found)
+            };
 
             Ok(if Some(expected_repo_kind) == actual {
                 Ok(())
@@ -437,11 +436,11 @@ mod cli {
         fn open_repo(&self, options: OpenRepoOptions<'_>) -> Result<Self::Repo, OpenRepoError> {
             let exists = |path, kind| {
                 self.exists(path, kind)
-                    .map_err(|e| anyhow::Error::new(e))
+                    .map_err(anyhow::Error::new)
                     .and_then(|res| Ok(res?))
                     .map_err(|source| OpenRepoError {
                         path: path.to_owned(),
-                        source: source.into(),
+                        source,
                     })
             };
             match options {
@@ -481,7 +480,7 @@ mod cli {
                 .run_cmd(cmd, |mut cmd| cmd.status())
                 .context("failed to spawn command")?;
             if !exit_status.success() {
-                return Err(anyhow!("command did not exit successfully").into());
+                return Err(anyhow!("command did not exit successfully"));
             }
             Ok(())
         }
