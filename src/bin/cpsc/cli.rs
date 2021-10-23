@@ -39,7 +39,7 @@ pub(crate) enum Cli {
     /// tuned for a better explanation!
     #[clap(subcommand)]
     Overlay(OverlaySubcommand),
-    /// Invokes the given command against the specified repo.
+    /// Invoke the given command against the specified repo.
     ///
     /// TODO: define how `GIT_DIR` and `GIT_WORK_TREE` env vars will be set for the given command.
     /// We may not want it in all cases right now.
@@ -52,7 +52,7 @@ pub(crate) enum Cli {
         #[clap(flatten)]
         cmd_and_args: CommandAndArgs,
     },
-    /// Invokes the given command against each repo entry configured for this tool.
+    /// Invoke the given command against each repo entry configured for this tool.
     ///
     /// By default, the working directory for each command invocation is set to the work tree root
     /// of the repo entry it's running against.
@@ -64,7 +64,7 @@ pub(crate) enum Cli {
         #[clap(flatten)]
         cmd_and_args: CommandAndArgs,
     },
-    /// Removes a repo entry, attempting to remove all files associated with the repo's work tree.
+    /// Remove a repo entry, attempting to remove all files associated with the repo's work tree.
     Remove { name: RepoName<'static> },
     // // TODO: A crazy ambitious idea to use the user's auto-magically detected shell?
     // Preposterous. :)
@@ -73,7 +73,7 @@ pub(crate) enum Cli {
     //     #[clap(long)]
     //     cd: bool,
     // },
-    /// Lists repo entries in the current configuration.
+    /// List repo entries in the current configuration.
     ///
     /// TODO: document repo spec and format options.
     List {
@@ -88,14 +88,14 @@ pub(crate) enum Cli {
 
 #[derive(Clap, Debug)]
 pub enum StarterSubcommand {
-    /// Imports a starter file from `PATH`.
+    /// Import a starter file from `PATH`.
     Import {
         path: PathBuf,
         /// If specified, attempt to interpret `PATH` as a relative path into the given Git repo
         /// source.
         git: RepoSource<'static>,
     },
-    /// Exports a starter file to `PATH`.
+    /// Export a starter file to `PATH`.
     Export { path: PathBuf },
 }
 
@@ -199,7 +199,7 @@ pub enum StandaloneSubcommand {
         #[clap(flatten)]
         name: CliNewRepoName,
     },
-    /// Clones a Git repository by cloning it from the specified `SOURCE`.
+    /// Clone a Git repository by cloning it from the specified `SOURCE`.
     ///
     /// If the target context already exists, this command makes no changes and exits with an
     /// error.
@@ -216,7 +216,7 @@ pub enum StandaloneSubcommand {
         #[clap(flatten)]
         name: CliNewRepoName,
     },
-    /// Deregisters the given standalone repo from this tool's configuration.
+    /// Deregister the given standalone repo from this tool's configuration.
     ///
     /// This subcommand makes no attempt to remove local files; it only removes this tool's
     /// awareness of them. If you also wish to remove all files, you may instead prefer to use the
@@ -241,7 +241,7 @@ pub enum OverlaySubcommand {
         /// TODO: discuss restrictions on the value provided heere
         name: RepoName<'static>,
     },
-    /// Clones a Git repository by cloning it from the specified `SOURCE`.
+    /// Clone a Git repository by cloning it from the specified `SOURCE`.
     ///
     /// If the target context already exists, this command makes no changes and exits with an
     /// error.
@@ -256,7 +256,7 @@ pub enum OverlaySubcommand {
         #[clap(long)]
         no_checkout: bool,
     },
-    /// Removes the bare Git repo associated with an overlay repo.
+    /// Remove the bare Git repo associated with an overlay repo.
     ///
     /// This subcommand makes no attempt to remove the work tree files associated with the
     /// specified repo; it only removes this tool's awareness of them. If you also wish to remove
