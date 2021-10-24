@@ -1,6 +1,6 @@
 # Capisco
 
-A dotfiles manager that understands you.
+A cross-platform dotfiles manager that understands you.
 
 Capisco is a Git repository manager oriented towards cross-platform dotfiles.
 It draws heavy inspiration from [`vcsh`], which focuses on managing local
