@@ -28,21 +28,21 @@ pub(crate) enum Cli {
     Starter(StarterSubcommand),
     /// Control the lifecycle of a stand-alone repo entry.
     ///
-    /// Stand-alone repos are what people typically think of when they say "Git repo": a local copy
-    /// of a Git repository.
+    /// `standalone` repos are what people typically think of when they say "Git repo": a local
+    /// copy of a Git repository.
     #[clap(subcommand)]
     Standalone(StandaloneSubcommand),
     /// Control the lifecycle of an overlay repo entry.
     ///
-    /// Overlay repos are some voo-doo over bare repos in a well-known location that serve some
-    /// interesting dotfiles use cases where a stand-alone repo entry is impractical. TODO: Stay
-    /// tuned for a better explanation!
+    /// `overlay` repos are bare repos rooted a home directory, configured such that overlapping
+    /// work trees can coexist peacefully. They're handy for dotfiles that don't have their own
+    /// dedicated folder.
     #[clap(subcommand)]
     Overlay(OverlaySubcommand),
-    /// Invoke the given command against the specified repo.
+    /// Invoke a command against a repo.
     ///
-    /// TODO: define how `GIT_DIR` and `GIT_WORK_TREE` env vars will be set for the given command.
-    /// We may not want it in all cases right now.
+    /// Currently, this command sets the `GIT_DIR` and `GIT_WORK_TREE` variables for the invoked
+    /// command. This behavior is not stable, and may be redesigned before 1.0.0.
     Run {
         repo_name: RepoName<'static>,
         #[clap(long)]
@@ -52,10 +52,11 @@ pub(crate) enum Cli {
         #[clap(flatten)]
         cmd_and_args: CommandAndArgs,
     },
-    /// Invoke the given command against each repo entry configured for this tool.
+    /// Invoke a command against all repos.
     ///
-    /// By default, the working directory for each command invocation is set to the work tree root
-    /// of the repo entry it's running against.
+    /// This command does the same as the `run`, except it (1) runs on all configured repos, and
+    /// (2) by default, the working directory for each command invocation is set to the work tree
+    /// root of the repo entry it's running against.
     ForEach {
         /// If set, uses the working directory of this tool's invocation, rather than the work tree
         /// root, for each repo entry command invocation.
@@ -199,7 +200,7 @@ pub enum StandaloneSubcommand {
         #[clap(flatten)]
         name: CliNewRepoName,
     },
-    /// Clone a Git repository by cloning it from the specified `SOURCE`.
+    /// Clone a Git repository from the specified `SOURCE`.
     ///
     /// If the target context already exists, this command makes no changes and exits with an
     /// error.
@@ -216,7 +217,7 @@ pub enum StandaloneSubcommand {
         #[clap(flatten)]
         name: CliNewRepoName,
     },
-    /// Deregister the given standalone repo from this tool's configuration.
+    /// Deregister `REPO` without deleting files.
     ///
     /// This subcommand makes no attempt to remove local files; it only removes this tool's
     /// awareness of them. If you also wish to remove all files, you may instead prefer to use the
@@ -234,6 +235,7 @@ pub enum StandaloneSubcommand {
 
 #[derive(Clap, Debug)]
 pub enum OverlaySubcommand {
+    /// Initialize a new `overlay` repo.
     Init {
         /// The alias by which this repo will be referred to when used later with this tool, if you
         /// wish to override what would be inferred.
@@ -241,7 +243,7 @@ pub enum OverlaySubcommand {
         /// TODO: discuss restrictions on the value provided heere
         name: RepoName<'static>,
     },
-    /// Clone a Git repository by cloning it from the specified `SOURCE`.
+    /// Clone a Git repository from the specified `SOURCE`.
     ///
     /// If the target context already exists, this command makes no changes and exits with an
     /// error.
@@ -256,7 +258,7 @@ pub enum OverlaySubcommand {
         #[clap(long)]
         no_checkout: bool,
     },
-    /// Remove the bare Git repo associated with an overlay repo.
+    /// Remove an `overlay` repo's Git files, leaving the worktree intact.
     ///
     /// This subcommand makes no attempt to remove the work tree files associated with the
     /// specified repo; it only removes this tool's awareness of them. If you also wish to remove
