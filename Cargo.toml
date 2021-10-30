@@ -10,7 +10,7 @@ version = "0.1.0-pre"
 
 [dependencies]
 anyhow = "1.0.42"
-clap = "3.0.0-beta.5"
+clap = { version = "3.0.0-beta.5", git = "https://github.com/clap-rs/clap", rev = "3a697af253b5fdeeda7078cd247555d0ea7e6e37" }
 colog = "1.1"
 dirs = "3.0.2"
 dunce = "1.0.2"
