@@ -28,7 +28,13 @@ use thiserror::Error as ThisError;
 /// <https://github.com/capisco-dotfiles/capisco/LICENSE.md>.
 #[derive(Debug, Parser)]
 #[clap(author, version)]
-pub(crate) enum Cli {
+pub(crate) struct Cli {
+    #[clap(subcommand)]
+    pub subcommand: Subcommand,
+}
+
+#[derive(Debug, Parser)]
+pub(crate) enum Subcommand {
     /// Use a starter file to quickly import or export a configuration.
     ///
     /// TODO: There's lots of ambitions for starter files, but they're yet to be fully designed or
