@@ -12,12 +12,12 @@
 // You should have received a copy of the GNU General Public License along with Capisco.  If not,
 // see <https://www.gnu.org/licenses/>.
 use crate::runner::{git::RepoSource, RepoName};
-use clap::Clap;
+use clap::Parser;
 use std::{ffi::OsString, path::PathBuf, process::Command, str::FromStr};
 use strum::EnumIter;
 use thiserror::Error as ThisError;
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 #[clap(about, author, version)]
 pub(crate) enum Cli {
     /// Use a starter file to quickly import or export a configuration.
@@ -87,7 +87,7 @@ pub(crate) enum Cli {
     // Status,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub enum StarterSubcommand {
     /// Import a starter file from `PATH`.
     Import {
@@ -100,7 +100,7 @@ pub enum StarterSubcommand {
     Export { path: PathBuf },
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub struct ListSubcommand {}
 
 #[derive(Debug)]
@@ -193,7 +193,7 @@ impl FromStr for ListFormat {
     }
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub enum StandaloneSubcommand {
     Init {
         path: Option<PathBuf>,
@@ -233,7 +233,7 @@ pub enum StandaloneSubcommand {
     // SetProjectDetails
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub enum OverlaySubcommand {
     /// Initialize a new `overlay` repo.
     Init {
@@ -266,13 +266,13 @@ pub enum OverlaySubcommand {
     RemoveBareRepo { name: RepoName<'static> },
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub struct CliExistingRepoName {
     /// A repo name previously added to this tool's configuration.
     pub name: RepoName<'static>,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 pub struct CliNewRepoName {
     /// The alias by which this repo will be referred to when used later with this tool, if you
     /// wish to override what would be inferred.
@@ -318,7 +318,7 @@ impl FromStr for CliRepoKind {
     }
 }
 
-#[derive(Clap, Clone, Debug)]
+#[derive(Parser, Clone, Debug)]
 pub struct CommandAndArgs {
     #[clap(raw(true))]
     cmd_and_args: Vec<OsString>,
