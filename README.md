@@ -1,4 +1,4 @@
-# Capisco 💡👍
+# Capisco 💡☝️
 
 A cross-platform dotfiles manager that understands you.
 
