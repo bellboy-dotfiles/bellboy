@@ -21,9 +21,12 @@ use crate::{
         Cli, CliNewRepoName, CliRepoKind, ListFormat, OverlaySubcommand, RepoSpec,
         StandaloneSubcommand,
     },
-    runner::repo_db::conflict::{
-        normalization::Normalization, NormalizedRepoNameEq, NormalizedRepoPathEq,
-        RepoConflictHandler,
+    runner::repo_db::{
+        conflict::{
+            normalization::Normalization, NormalizedRepoNameEq, NormalizedRepoPathEq,
+            RepoConflictHandler,
+        },
+        NewStandaloneMethod,
     },
 };
 use anyhow::{anyhow, bail, Context};
@@ -178,10 +181,12 @@ impl Runner {
                         repos.new_standalone(
                             dirs,
                             git,
-                            name,
-                            path.into(),
-                            None,
-                            NewStandaloneOptions::Init,
+                            NewStandaloneOptions {
+                                name,
+                                path: path.into(),
+                                app_info: None,
+                                method: NewStandaloneMethod::Init,
+                            },
                             handler,
                         )
                     })
@@ -203,10 +208,12 @@ impl Runner {
                         repos.new_standalone(
                             dirs,
                             git,
-                            name,
-                            path.into(),
-                            None,
-                            NewStandaloneOptions::Clone { source },
+                            NewStandaloneOptions {
+                                name,
+                                path: path.into(),
+                                app_info: None,
+                                method: NewStandaloneMethod::Clone { source },
+                            },
                             handler,
                         )
                     })
@@ -221,10 +228,12 @@ impl Runner {
                         repos.new_standalone(
                             dirs,
                             git,
-                            name,
-                            path.into(),
-                            None,
-                            NewStandaloneOptions::Register,
+                            NewStandaloneOptions {
+                                name,
+                                path: path.into(),
+                                app_info: None,
+                                method: NewStandaloneMethod::Register,
+                            },
                             handler,
                         )
                     })

@@ -419,12 +419,15 @@ impl RepoDb {
         &mut self,
         dirs: &Directories,
         git: &DynGit,
-        name: RepoName<'_>,
-        path: Cow<'_, Path>,
-        app_info: Option<AppInfo<'_>>,
         options: NewStandaloneOptions<'_>,
         conflict_handler: &mut dyn RepoConflictHandler,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
+        let NewStandaloneOptions {
+            name,
+            path,
+            app_info,
+            method,
+        } = options;
         let repo = |path: &Path| -> anyhow::Result<_> {
             // Git doesn't understand UNC paths, which is what
             // `std::fs::canonicalize` converts paths to on Windows.
@@ -460,8 +463,8 @@ impl RepoDb {
             }
             Ok(())
         };
-        match options {
-            NewStandaloneOptions::Init => {
+        match method {
+            NewStandaloneMethod::Init => {
                 create_dir(&path)?;
                 let repo = repo(&path)?;
                 Ok(self.init_new(
@@ -472,7 +475,7 @@ impl RepoDb {
                     conflict_handler,
                 )?)
             }
-            NewStandaloneOptions::Clone { source } => {
+            NewStandaloneMethod::Clone { source } => {
                 create_dir(&path)?;
                 let repo = repo(&path)?;
                 Ok(self.clone_new(
@@ -484,7 +487,7 @@ impl RepoDb {
                     conflict_handler,
                 )?)
             }
-            NewStandaloneOptions::Register => {
+            NewStandaloneMethod::Register => {
                 let repo = repo(&path)?;
                 Self::check_repo_exists(dirs, git, name.to_borrowed(), repo.to_borrowed())?;
                 self.validate_no_add_conflicts(
@@ -795,7 +798,15 @@ impl RepoDb {
 }
 
 #[derive(Debug)]
-pub enum NewStandaloneOptions<'a> {
+pub struct NewStandaloneOptions<'a> {
+    pub name: RepoName<'a>,
+    pub path: Cow<'a, Path>,
+    pub app_info: Option<AppInfo<'a>>,
+    pub method: NewStandaloneMethod<'a>,
+}
+
+#[derive(Debug)]
+pub enum NewStandaloneMethod<'a> {
     Init,
     Clone { source: RepoSource<'a> },
     Register,
