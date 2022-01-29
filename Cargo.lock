@@ -47,7 +47,7 @@ dependencies = [
  "anyhow",
  "clap",
  "colog",
- "dirs",
+ "directories",
  "dunce",
  "format",
  "lifetime",
@@ -60,8 +60,8 @@ dependencies = [
  "strum",
  "thiserror",
  "toml",
+ "unicase",
  "url",
- "xdg",
 ]
 
 [[package]]
@@ -168,10 +168,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs"
-version = "3.0.2"
+name = "directories"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30baa043103c9d0c2a57cf537cc2f35623889dc0d405e6c3cccfadbc81c71309"
+checksum = "f51c5d4ddabd36886dd3e1438cb358cdcb0d7c499cb99cb4ac2e38e18b5cb210"
 dependencies = [
  "dirs-sys",
 ]
@@ -682,6 +682,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "unicase"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "unicode-bidi"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -762,22 +771,3 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "windows-permissions"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e2ccdc3c6bf4d4a094e031b63fadd08d8e42abd259940eb8aa5fdc09d4bf9be"
-dependencies = [
- "bitflags",
- "winapi",
-]
-
-[[package]]
-name = "xdg"
-version = "2.4.0"
-source = "git+https://github.com/ErichDonGubler/rust-xdg?branch=windows-support#2aed22405fd6efbe51902dd29becaff3eb81103a"
-dependencies = [
- "dirs",
- "windows-permissions",
-]

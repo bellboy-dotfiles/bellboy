@@ -11,12 +11,14 @@
 //
 // You should have received a copy of the GNU General Public License along with Capisco.  If not,
 // see <https://www.gnu.org/licenses/>.
+use self::conflict::{RepoConflictHandler, RepoConflictSearcher};
 use crate::{
     cli::CliRepoKind,
     runner::{
         canonicalize_path,
         dirs::Directories,
         git::{DynGit, DynGitRepo, GitRepoTrait, GitTrait, OpenRepoOptions, RepoSource},
+        repo_db::conflict::{normalization::NormalizedEqOutcome, RepoConflictCheck},
     },
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -24,7 +26,6 @@ use format::lazy_format;
 use lifetime::{IntoStatic, ToBorrowed};
 use path_dsl::path;
 use remove_dir_all::remove_dir_all;
-use same_file::is_same_file;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::{
     borrow::Cow,
@@ -38,6 +39,8 @@ use std::{
     str::FromStr,
 };
 use thiserror::Error as ThisError;
+
+pub mod conflict;
 
 #[derive(Debug)]
 pub(super) struct RepoDb {
@@ -342,11 +345,17 @@ impl RepoDb {
         git: &DynGit,
         name: RepoName<'_>,
         options: NewOverlayOptions<'_>,
+        conflict_handler: &mut dyn RepoConflictHandler,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
         let repo = RepoEntry {
             kind: RepoEntryKind::Overlay {},
         };
-        self.validate_no_add_conflicts(dirs, name.to_borrowed(), repo.to_borrowed())?;
+        self.validate_no_add_conflicts(
+            dirs,
+            name.to_borrowed(),
+            repo.to_borrowed(),
+            conflict_handler,
+        )?;
         // // TODO: improve diagnostic for repo already existing
         // create_dir(&repo.path(dirs, name.to_borrowed())?) // TODO: revert creating this if something fails
         //     .context("failed to make clone target directory")?;
@@ -355,8 +364,14 @@ impl RepoDb {
                 source,
                 no_checkout,
             } => {
-                let (name, repo) =
-                    self.clone_new(dirs, git, name.into_static(), repo, source.into_static())?;
+                let (name, repo) = self.clone_new(
+                    dirs,
+                    git,
+                    name.into_static(),
+                    repo,
+                    source.into_static(),
+                    conflict_handler,
+                )?;
                 match repo
                     .open(git, dirs, name.to_borrowed())
                     .and_then(|mut repo| {
@@ -373,7 +388,9 @@ impl RepoDb {
                 };
                 (name, repo)
             }
-            NewOverlayOptions::Init => self.init_new(dirs, git, name.into_static(), repo)?,
+            NewOverlayOptions::Init => {
+                self.init_new(dirs, git, name.into_static(), repo, conflict_handler)?
+            }
         };
 
         // Tweak bare repo for overlay
@@ -402,11 +419,15 @@ impl RepoDb {
         &mut self,
         dirs: &Directories,
         git: &DynGit,
-        name: RepoName<'_>,
-        path: Cow<'_, Path>,
-        app_info: Option<AppInfo<'_>>,
         options: NewStandaloneOptions<'_>,
+        conflict_handler: &mut dyn RepoConflictHandler,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
+        let NewStandaloneOptions {
+            name,
+            path,
+            app_info,
+            method,
+        } = options;
         let repo = |path: &Path| -> anyhow::Result<_> {
             // Git doesn't understand UNC paths, which is what
             // `std::fs::canonicalize` converts paths to on Windows.
@@ -442,13 +463,19 @@ impl RepoDb {
             }
             Ok(())
         };
-        match options {
-            NewStandaloneOptions::Init => {
+        match method {
+            NewStandaloneMethod::Init => {
                 create_dir(&path)?;
                 let repo = repo(&path)?;
-                Ok(self.init_new(dirs, git, name.into_static(), repo.into_static())?)
+                Ok(self.init_new(
+                    dirs,
+                    git,
+                    name.into_static(),
+                    repo.into_static(),
+                    conflict_handler,
+                )?)
             }
-            NewStandaloneOptions::Clone { source } => {
+            NewStandaloneMethod::Clone { source } => {
                 create_dir(&path)?;
                 let repo = repo(&path)?;
                 Ok(self.clone_new(
@@ -457,12 +484,18 @@ impl RepoDb {
                     name.into_static(),
                     repo.into_static(),
                     source.into_static(),
+                    conflict_handler,
                 )?)
             }
-            NewStandaloneOptions::Register => {
+            NewStandaloneMethod::Register => {
                 let repo = repo(&path)?;
                 Self::check_repo_exists(dirs, git, name.to_borrowed(), repo.to_borrowed())?;
-                self.validate_no_add_conflicts(dirs, name.to_borrowed(), repo.to_borrowed())?;
+                self.validate_no_add_conflicts(
+                    dirs,
+                    name.to_borrowed(),
+                    repo.to_borrowed(),
+                    conflict_handler,
+                )?;
                 Ok(self.insert(name.into_static(), repo.into_static()))
             }
         }
@@ -474,8 +507,14 @@ impl RepoDb {
         git: &DynGit,
         name: RepoName<'static>,
         repo: RepoEntry<'static>,
+        conflict_handler: &mut dyn RepoConflictHandler,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
-        self.validate_no_add_conflicts(dirs, name.to_borrowed(), repo.to_borrowed())?;
+        self.validate_no_add_conflicts(
+            dirs,
+            name.to_borrowed(),
+            repo.to_borrowed(),
+            conflict_handler,
+        )?;
 
         let path = repo.path(dirs, name.to_borrowed())?;
         git.init(path.as_ref(), repo.kind().into())
@@ -491,8 +530,14 @@ impl RepoDb {
         name: RepoName<'static>,
         repo: RepoEntry<'static>,
         source: RepoSource<'static>,
+        conflict_handler: &mut dyn RepoConflictHandler,
     ) -> anyhow::Result<(RepoName<'_>, RepoEntry<'_>)> {
-        self.validate_no_add_conflicts(dirs, name.to_borrowed(), repo.to_borrowed())?;
+        self.validate_no_add_conflicts(
+            dirs,
+            name.to_borrowed(),
+            repo.to_borrowed(),
+            conflict_handler,
+        )?;
 
         let path = repo.path(dirs, name.to_borrowed())?;
         git.clone(path.as_ref(), source, repo.kind().into())
@@ -506,40 +551,60 @@ impl RepoDb {
         dirs: &Directories,
         name: RepoName<'_>,
         repo: RepoEntry<'_>,
+        conflict_handler: &mut dyn RepoConflictHandler,
     ) -> anyhow::Result<()> {
-        let path = repo.path(dirs, name.to_borrowed())?;
-        for (other_name, repo) in self.repos.iter() {
-            let names_match = &name == other_name;
-            let paths_match = {
-                let other_repo_path = repo.path(dirs, other_name.to_borrowed())?;
-                is_same_file(&path, &other_repo_path).unwrap_or_else(|e| {
-                    log::warn!(
-                        "failed to compare paths for equality: {:?}, {:?}: {}",
-                        path,
-                        other_repo_path,
-                        e,
-                    );
-                    false
-                })
-            };
-            if names_match || paths_match {
-                // TODO: These diagnostics should probably live in `runner`. Let's audit diagnostic
-                // locations after we get things working.
-                if names_match && paths_match {
-                    bail!(
-                        "repo {:?} is already added; did you accidentally repeat a command?",
-                        other_name,
-                    );
-                } else {
-                    bail!(
-                        "a repo with the name {:?} already exists as a {}",
-                        other_name,
-                        repo.short_desc(),
-                    );
+        let mut conflict_occurred = false;
+        let mut conflict_searcher = self
+            .find_add_conflicts(dirs, name.to_borrowed(), repo.to_borrowed())
+            .context("failed to perform search for conflicts in adding repo")?;
+        while let Some(conflict_res) = conflict_searcher.next_conflict() {
+            conflict_occurred = true;
+            match conflict_res {
+                Ok(m) => {
+                    let RepoConflictCheck {
+                        found_name,
+                        name_eq,
+                        entry_match,
+                    } = m;
+                    assert!(name_eq.outcome.matched() || entry_match.outcome.matched());
+                    match name_eq.outcome {
+                        NormalizedEqOutcome::ExactMatch => {
+                            conflict_handler.on_conflict_name(found_name.to_borrowed(), None)
+                        }
+                        NormalizedEqOutcome::MatchAfterNormalization { reason } => conflict_handler
+                            .on_conflict_name(found_name.to_borrowed(), Some(reason)),
+                        NormalizedEqOutcome::NotAMatch => (),
+                    }
+                    match entry_match.outcome {
+                        NormalizedEqOutcome::ExactMatch => {
+                            conflict_handler.on_conflict_name(found_name, None)
+                        }
+                        NormalizedEqOutcome::MatchAfterNormalization { reason } => conflict_handler
+                            .on_conflict_path(
+                                found_name.to_borrowed(),
+                                Some((entry_match.found, reason)),
+                            ),
+                        NormalizedEqOutcome::NotAMatch => (),
+                    }
                 }
+                Err(e) => conflict_handler.on_iteration_err(e),
             }
         }
+        ensure!(
+            !conflict_occurred,
+            "one or more existing repo entries conflict"
+        );
         Ok(())
+    }
+
+    fn find_add_conflicts<'a, 'this: 'a>(
+        &'this mut self,
+        dirs: &'a Directories,
+        name: RepoName<'a>,
+        repo: RepoEntry<'a>,
+    ) -> anyhow::Result<RepoConflictSearcher<'a>> {
+        log::debug!("searching for existing repos with name and repo information");
+        RepoConflictSearcher::new(name, repo, dirs, self)
     }
 
     fn check_repo_exists(
@@ -733,7 +798,15 @@ impl RepoDb {
 }
 
 #[derive(Debug)]
-pub enum NewStandaloneOptions<'a> {
+pub struct NewStandaloneOptions<'a> {
+    pub name: RepoName<'a>,
+    pub path: Cow<'a, Path>,
+    pub app_info: Option<AppInfo<'a>>,
+    pub method: NewStandaloneMethod<'a>,
+}
+
+#[derive(Debug)]
+pub enum NewStandaloneMethod<'a> {
     Init,
     Clone { source: RepoSource<'a> },
     Register,

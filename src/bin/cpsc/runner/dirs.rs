@@ -12,41 +12,47 @@
 // You should have received a copy of the GNU General Public License along with Capisco.  If not,
 // see <https://www.gnu.org/licenses/>.
 use anyhow::Context;
+use directories::{BaseDirs, ProjectDirs};
 use std::{
     env,
     path::{Path, PathBuf},
 };
-use xdg::BaseDirectories;
 
 #[derive(Debug)]
 pub(crate) struct Directories {
-    base_dirs: BaseDirectories,
+    base_dirs: BaseDirs,
+    project_dirs: ProjectDirs,
 }
 
 impl Directories {
     pub(crate) fn new() -> anyhow::Result<Self> {
-        // TODO: Use native config folders if they exist; warn that they're not portable.,
-        let base_dirs = BaseDirectories::with_prefix(env!("CARGO_PKG_NAME"))
-            .context("failed to detect XDG directories")?;
-        Ok(Self { base_dirs })
+        Ok(Self {
+            base_dirs: BaseDirs::new().context("no home directory found for current user")?, // error message based on documented error cases for `BaseDirs::new`
+            project_dirs: ProjectDirs::from(
+                "", // TODO: Is this right?
+                "capisco-dotfiles",
+                env!("CARGO_PKG_NAME"),
+            )
+            .unwrap(),
+        })
     }
 
     pub(crate) fn home_dir_path(&self) -> anyhow::Result<PathBuf> {
-        dirs::home_dir().context("user home directory not found")
+        // TODO: Remove `Result`, return a reference
+        Ok(self.base_dirs.home_dir().to_path_buf())
     }
 
     pub(crate) fn overlay_repos_dir_path(&self) -> anyhow::Result<PathBuf> {
-        let Self { base_dirs } = self;
-        base_dirs
-            .create_data_directory("overlay_repos")
-            .context("failed to create overlay repos directory")
+        // TODO: Remove `Result`
+        Ok(self.project_dirs.data_local_dir().join("overlay_repos/"))
     }
 
     pub(crate) fn standalone_repo_db_path(&self) -> anyhow::Result<PathBuf> {
-        let Self { base_dirs } = self;
-        base_dirs
-            .place_data_file("standalone_repos.toml")
-            .context("failed to place database file path")
+        // TODO: Remove `Result`
+        Ok(self
+            .project_dirs
+            .data_local_dir()
+            .join("standalone_repos.toml"))
     }
 }
 
