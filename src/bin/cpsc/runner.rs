@@ -16,8 +16,15 @@ use self::{
     git::{DynGit, GitCli, GitRepoKind, GitRepoTrait},
     repo_db::{NewOverlayOptions, NewStandaloneOptions, RepoDb, RepoEntry},
 };
-use crate::cli::{
-    Cli, CliNewRepoName, CliRepoKind, ListFormat, OverlaySubcommand, RepoSpec, StandaloneSubcommand,
+use crate::{
+    cli::{
+        Cli, CliNewRepoName, CliRepoKind, ListFormat, OverlaySubcommand, RepoSpec,
+        StandaloneSubcommand,
+    },
+    runner::repo_db::conflict::{
+        normalization::Normalization, NormalizedRepoNameEq, NormalizedRepoPathEq,
+        RepoConflictHandler,
+    },
 };
 use anyhow::{anyhow, bail, Context};
 use format::lazy_format;
@@ -94,9 +101,70 @@ impl Runner {
     }
 
     pub(crate) fn run(&mut self, cli_args: Cli) -> anyhow::Result<()> {
-        let log_registered = |name, repo: RepoEntry<'_>| {
+        fn print_add_res<'a, F>(op_name: &'static str, f: F) -> anyhow::Result<()>
+        where
+            F: FnOnce(
+                    &mut dyn RepoConflictHandler,
+                ) -> anyhow::Result<(RepoName<'a>, RepoEntry<'a>)>
+                + 'a,
+        {
+            struct ConflictHandler;
+
+            impl RepoConflictHandler for ConflictHandler {
+                fn on_conflict_path(
+                    &mut self,
+                    matched: RepoName<'_>,
+                    partial_reason: Option<(Cow<'_, Path>, NormalizedRepoPathEq)>,
+                ) {
+                    log::error!(
+                        "a repo with the path {:?} already exists{}",
+                        matched,
+                        lazy_format!(move |f| {
+                            match &partial_reason {
+                                None => Ok(()),
+                                Some((found, match_reason)) => {
+                                    write!(f, " (")?;
+                                    match_reason.describe(found, f)?;
+                                    write!(f, ")")?;
+                                    Ok(())
+                                }
+                            }
+                        })
+                    );
+                }
+
+                fn on_conflict_name(
+                    &mut self,
+                    matched: RepoName<'_>,
+                    partial_reason: Option<NormalizedRepoNameEq>,
+                ) {
+                    log::error!(
+                        "a repo with the name {:?} already exists at the specified path{}",
+                        matched,
+                        lazy_format!(|f| {
+                            match &partial_reason {
+                                None => Ok(()),
+                                Some(match_reason) => {
+                                    write!(f, " (")?;
+                                    match_reason.describe(&matched, f)?;
+                                    write!(f, ")")?;
+                                    Ok(())
+                                }
+                            }
+                        })
+                    );
+                }
+
+                fn on_iteration_err(&mut self, err: anyhow::Error) {
+                    log::error!("failed to enumerate existing repo entry: {:?}", err);
+                }
+            }
+            let (name, repo) =
+                f(&mut ConflictHandler).with_context(|| anyhow!("failed to {} repo", op_name))?;
+
             log::info!("registered {:?} as {}", name, repo.short_desc());
-        };
+            Ok(())
+        }
         match cli_args {
             Cli::Starter(_subcmd) => {
                 bail!("`starter` commands are not implemented yet, stay tuned!")
@@ -106,16 +174,17 @@ impl Runner {
                     let Self { dirs, git, repos } = self;
                     let path = path.map(Ok).unwrap_or_else(current_dir)?;
                     let name = name.unwrap_or_base_name(&path)?;
-                    let (name, repo) = repos.new_standalone(
-                        dirs,
-                        git,
-                        name,
-                        path.into(),
-                        None,
-                        NewStandaloneOptions::Init,
-                    )?;
-                    log_registered(name, repo);
-                    Ok(())
+                    print_add_res("initialize", |handler| {
+                        repos.new_standalone(
+                            dirs,
+                            git,
+                            name,
+                            path.into(),
+                            None,
+                            NewStandaloneOptions::Init,
+                            handler,
+                        )
+                    })
                 }
                 StandaloneSubcommand::Clone { name, path, source } => {
                     let Self { dirs, git, repos } = self;
@@ -128,16 +197,17 @@ impl Runner {
                     })?;
                     let name = name.unwrap_or_base_name(&path)?;
 
-                    let (name, repo) = repos.new_standalone(
-                        dirs,
-                        git,
-                        name,
-                        path.into(),
-                        None,
-                        NewStandaloneOptions::Clone { source },
-                    )?;
-                    log_registered(name, repo);
-                    Ok(())
+                    print_add_res("clone", |handler| {
+                        repos.new_standalone(
+                            dirs,
+                            git,
+                            name,
+                            path.into(),
+                            None,
+                            NewStandaloneOptions::Clone { source },
+                            handler,
+                        )
+                    })
                 }
                 StandaloneSubcommand::Register { path, name } => {
                     let Self { repos, dirs, git } = self;
@@ -145,16 +215,17 @@ impl Runner {
                     let path = path.map(Ok).unwrap_or_else(current_dir)?;
                     let name = name.unwrap_or_base_name(&path)?;
 
-                    let (name, repo) = repos.new_standalone(
-                        dirs,
-                        git,
-                        name,
-                        path.into(),
-                        None,
-                        NewStandaloneOptions::Register,
-                    )?;
-                    log_registered(name, repo);
-                    Ok(())
+                    print_add_res("register", |handler| {
+                        repos.new_standalone(
+                            dirs,
+                            git,
+                            name,
+                            path.into(),
+                            None,
+                            NewStandaloneOptions::Register,
+                            handler,
+                        )
+                    })
                 }
                 StandaloneSubcommand::Deregister { repo, name } => {
                     let Self {
@@ -186,10 +257,9 @@ impl Runner {
             Cli::Overlay(subcmd) => match subcmd {
                 OverlaySubcommand::Init { name } => {
                     let Self { dirs, git, repos } = self;
-                    let (name, repo) =
-                        repos.new_overlay(dirs, git, name, NewOverlayOptions::Init)?;
-                    log_registered(name, repo);
-                    Ok(())
+                    print_add_res("initialize", |handler| {
+                        repos.new_overlay(dirs, git, name, NewOverlayOptions::Init, handler)
+                    })
                 }
                 OverlaySubcommand::Clone {
                     name,
@@ -200,17 +270,18 @@ impl Runner {
                     let name = name.into_opt().map(Ok).unwrap_or_else(|| -> anyhow::Result<_> {
                         todo!("still haven't implemented getting a base name from the repo source")
                     })?;
-                    let (name, repo) = repos.new_overlay(
-                        dirs,
-                        git,
-                        name,
-                        NewOverlayOptions::Clone {
-                            source,
-                            no_checkout,
-                        },
-                    )?;
-                    log_registered(name, repo);
-                    Ok(())
+                    print_add_res("clone", |handler| {
+                        repos.new_overlay(
+                            dirs,
+                            git,
+                            name,
+                            NewOverlayOptions::Clone {
+                                source,
+                                no_checkout,
+                            },
+                            handler,
+                        )
+                    })
                 }
                 OverlaySubcommand::RemoveBareRepo { name } => {
                     let Self {
