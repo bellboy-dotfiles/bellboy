@@ -188,8 +188,10 @@ impl Runner {
                 }
                 StandaloneSubcommand::Clone { name, path, source } => {
                     let Self { dirs, git, repos } = self;
+                    #[allow(clippy::diverging_sub_expression)]
                     let path = path.map(Ok).unwrap_or_else(|| -> anyhow::Result<_> {
                         let mut cwd = current_dir()?;
+                        #[allow(unreachable_code)]
                         cwd.push::<&Path>(todo!(
                             "still haven't implemented getting a base name from the repo source"
                         ));

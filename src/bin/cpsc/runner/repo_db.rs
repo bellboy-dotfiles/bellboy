@@ -601,7 +601,7 @@ impl RepoDb {
         repo: RepoEntry<'a>,
     ) -> anyhow::Result<RepoConflictSearcher<'a>> {
         log::debug!("searching for existing repos with name and repo information");
-        Ok(RepoConflictSearcher::new(name, repo, dirs, self)?)
+        RepoConflictSearcher::new(name, repo, dirs, self)
     }
 
     fn check_repo_exists(
