@@ -19,7 +19,7 @@ use self::{
 use crate::{
     cli::{
         Cli, CliNewRepoName, CliRepoKind, ListFormat, OverlaySubcommand, RepoSpec,
-        StandaloneSubcommand,
+        StandaloneSubcommand, Subcommand
     },
     runner::repo_db::{
         conflict::{
@@ -168,11 +168,14 @@ impl Runner {
             log::info!("registered {:?} as {}", name, repo.short_desc());
             Ok(())
         }
-        match cli_args {
-            Cli::Starter(_subcmd) => {
+
+        let Cli { subcommand } = cli_args;
+
+        match subcommand {
+            Subcommand::Starter(_subcmd) => {
                 bail!("`starter` commands are not implemented yet, stay tuned!")
             }
-            Cli::Standalone(subcmd) => match subcmd {
+            Subcommand::Standalone(subcmd) => match subcmd {
                 StandaloneSubcommand::Init { path, name } => {
                     let Self { dirs, git, repos } = self;
                     let path = path.map(Ok).unwrap_or_else(current_dir)?;
@@ -265,7 +268,7 @@ impl Runner {
                     Ok(())
                 }
             },
-            Cli::Overlay(subcmd) => match subcmd {
+            Subcommand::Overlay(subcmd) => match subcmd {
                 OverlaySubcommand::Init { name } => {
                     let Self { dirs, git, repos } = self;
                     print_add_res("initialize", |handler| {
@@ -305,7 +308,7 @@ impl Runner {
                     Ok(())
                 }
             },
-            Cli::Run {
+            Subcommand::Run {
                 repo_name,
                 cd_root,
                 cmd_and_args,
@@ -363,7 +366,7 @@ impl Runner {
             // TODO: This `allow` is necessary, but `clippy` throws a false positive. We need
             // to `collect` first in order to avoid borrowing `self` while iterating.
             #[allow(clippy::needless_collect)]
-            Cli::ForEach {
+            Subcommand::ForEach {
                 no_cd_root,
                 cmd_and_args,
             } => {
@@ -380,10 +383,12 @@ impl Runner {
                         repo_short_desc
                     );
                     match self
-                        .run(Cli::Run {
-                            repo_name: repo_name.clone(),
-                            cd_root: !no_cd_root,
-                            cmd_and_args: cmd_and_args.clone(),
+                        .run(Cli {
+                            subcommand: Subcommand::Run {
+                                repo_name: repo_name.clone(),
+                                cd_root: !no_cd_root,
+                                cmd_and_args: cmd_and_args.clone(),
+                            },
                         })
                         .with_context(|| anyhow!("failed to run command for repo {:?}", repo_name))
                     {
@@ -402,12 +407,12 @@ impl Runner {
                     Ok(())
                 }
             }
-            Cli::Remove { name } => {
+            Subcommand::Remove { name } => {
                 let Self { dirs, git, repos } = self;
                 repos.try_remove_entire_repo(dirs, git, name)?;
                 Ok(())
             }
-            Cli::List { repo_spec, format } => {
+            Subcommand::List { repo_spec, format } => {
                 let Self {
                     dirs,
                     git: _, // TODO: diagnostics for broken stuff? :D

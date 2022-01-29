@@ -17,9 +17,24 @@ use std::{ffi::OsString, path::PathBuf, process::Command, str::FromStr};
 use strum::EnumIter;
 use thiserror::Error as ThisError;
 
+// NOTE: Keep this tagline in sync with the `README` and the package description in the top-level
+// `Cargo.toml` file of this repo.
+/// A dotfiles manager that understands you.
+///
+/// `cpsc` Copyright (C) 2021 Capisco authors
+///
+/// This program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to
+/// redistribute it under certain conditions; for details see
+/// <https://github.com/capisco-dotfiles/capisco/LICENSE.md>.
 #[derive(Debug, Parser)]
-#[clap(about, author, version)]
-pub(crate) enum Cli {
+#[clap(author, version)]
+pub(crate) struct Cli {
+    #[clap(subcommand)]
+    pub subcommand: Subcommand,
+}
+
+#[derive(Debug, Parser)]
+pub(crate) enum Subcommand {
     /// Use a starter file to quickly import or export a configuration.
     ///
     /// TODO: There's lots of ambitions for starter files, but they're yet to be fully designed or

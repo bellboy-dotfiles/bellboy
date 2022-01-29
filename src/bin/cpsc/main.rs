@@ -13,7 +13,7 @@
 // see <https://www.gnu.org/licenses/>.
 use self::{
     cli::Cli,
-    runner::{Directories, Runner}, // TODO: rename to `runner`?
+    runner::{Directories, Runner},
 };
 use anyhow::Context;
 use clap::Parser;
