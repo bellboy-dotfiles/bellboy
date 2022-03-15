@@ -15,6 +15,7 @@ use anyhow::Context;
 use directories::{BaseDirs, ProjectDirs};
 use std::{
     env,
+    fs::create_dir_all,
     path::{Path, PathBuf},
 };
 
@@ -26,7 +27,8 @@ pub(crate) struct Directories {
 
 impl Directories {
     pub(crate) fn new() -> anyhow::Result<Self> {
-        Ok(Self {
+        // TODO: make this mockable
+        let this = Self {
             base_dirs: BaseDirs::new().context("no home directory found for current user")?, // error message based on documented error cases for `BaseDirs::new`
             project_dirs: ProjectDirs::from(
                 "", // TODO: Is this right?
@@ -34,7 +36,13 @@ impl Directories {
                 env!("CARGO_PKG_NAME"),
             )
             .unwrap(),
-        })
+        };
+        create_dir_all(
+            this.overlay_repos_dir_path()
+                .context("failed to get overlay repos directory path")?,
+        )
+        .context("failed to create overlay repos directory path")?;
+        Ok(this)
     }
 
     pub(crate) fn home_dir_path(&self) -> anyhow::Result<PathBuf> {
