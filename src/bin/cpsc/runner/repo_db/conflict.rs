@@ -13,6 +13,7 @@ use std::{
     borrow::Cow,
     convert::Infallible,
     fmt::{self, Formatter},
+    fs, io,
     path::Path,
 };
 use unicase::UniCase;
@@ -158,14 +159,29 @@ impl<'a> Normalization<Cow<'a, Path>> for NormalizedRepoPathEq {
         t1: &Cow<'a, Path>,
         t2: &Cow<'a, Path>,
     ) -> Result<NormalizedEqOutcome<Self>, Self::Error> {
-        let is_same_file = is_same_file(&t1, &t2).map_err(|e| {
-            anyhow!(
-                "failed to compare paths for equality: {:?}, {:?}: {}",
-                t1,
-                t2,
-                e,
-            )
-        })?;
+        let exists = |path| {
+            fs::metadata(path).map(|_metadata| true).or_else(|e| {
+                if e.kind() == io::ErrorKind::NotFound {
+                    Ok(false)
+                } else {
+                    Err(anyhow!("failed to check if path {path:?} exists: {e}"))
+                }
+            })
+        };
+        let t1_exists = exists(&t1)?;
+        let t2_exists = exists(&t2)?;
+        let is_same_file = match (t1_exists, t2_exists) {
+            (false, false) => t1 == t2,
+            (false, true) | (true, false) => false,
+            (true, true) => is_same_file(&t1, &t2).map_err(|e| {
+                anyhow!(
+                    "failed to compare paths for equality: {:?}, {:?}: {}",
+                    t1,
+                    t2,
+                    e,
+                )
+            })?,
+        };
 
         Ok(if is_same_file {
             if t1 == t2 {
