@@ -204,7 +204,7 @@ impl RepoEntry<'_> {
             }
         };
         git.open_repo(options)
-            .with_context(|| anyhow!("failed to open {:?} repo", name))
+            .with_context(|| format!("failed to open {:?} repo", name))
     }
 
     pub fn kind(&self) -> CliRepoKind {
@@ -272,14 +272,14 @@ impl RepoDb {
             Ok(entries) => {
                 entries.filter_map(|ent| {
                         (|| -> anyhow::Result<_> {
-                            let ent = ent.with_context(|| anyhow!("failed to read a dir entry in overlay repo path"))?;
+                            let ent = ent.with_context(|| format!("failed to read a dir entry in overlay repo path"))?;
 
                             let file_name = ent.file_name();
                             let file_name = file_name.to_str().context("file name is not convertible to UTF-8")
                                 .and_then(|finm| -> Result<RepoName<'static>> {
                                     finm.parse().map_err(anyhow::Error::new)
                                 })
-                                .with_context(|| anyhow!("file name {:?} is not a valid repo name", file_name))?;
+                                .with_context(|| format!("file name {:?} is not a valid repo name", file_name))?;
 
                             if !ent.path().is_dir() {
                                 log::warn!(
@@ -638,7 +638,7 @@ impl RepoDb {
 
     pub fn get_by_name(&self, name: RepoName<'_>) -> anyhow::Result<RepoEntry<'_>> {
         self.get_by_name_opt(name.to_borrowed())
-            .with_context(|| anyhow!("{:?} is not a repo name in the current configuration", name))
+            .with_context(|| format!("{:?} is not a repo name in the current configuration", name))
     }
 
     pub fn get_by_path(
@@ -739,7 +739,7 @@ impl RepoDb {
     ) -> anyhow::Result<RepoEntry<'static>> {
         let repo = self
             .remove(name.to_borrowed())
-            .with_context(|| anyhow!("no repo with the name {:?} is configured", name))?;
+            .with_context(|| format!("no repo with the name {:?} is configured", name))?;
 
         // TODO: Seek confirmation. This is dangerous, yo.
 

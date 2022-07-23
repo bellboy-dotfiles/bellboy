@@ -85,7 +85,7 @@ impl CliNewRepoName {
             // TODO: Do some
             path_buf
                 .file_name()
-                .with_context(|| anyhow!("no base name found for path {:?}", path))?
+                .with_context(|| format!("no base name found for path {:?}", path))?
                 .to_str()
                 .context("base name is not UTF-8")
                 .and_then(|base_name| Ok(RepoName::from_str(base_name)?))
@@ -163,7 +163,7 @@ impl Runner {
                 }
             }
             let (name, repo) =
-                f(&mut ConflictHandler).with_context(|| anyhow!("failed to {} repo", op_name))?;
+                f(&mut ConflictHandler).with_context(|| format!("failed to {} repo", op_name))?;
 
             log::info!("registered {:?} as {}", name, repo.short_desc());
             Ok(())
@@ -385,7 +385,7 @@ impl Runner {
                             cd_root: !no_cd_root,
                             cmd_and_args: cmd_and_args.clone(),
                         })
-                        .with_context(|| anyhow!("failed to run command for repo {:?}", repo_name))
+                        .with_context(|| format!("failed to run command for repo {:?}", repo_name))
                     {
                         Ok(()) => (),
                         Err(e) => {
@@ -478,7 +478,7 @@ impl Display for RemoteName<'_> {
 
 fn canonicalize_path(path: &Path) -> anyhow::Result<PathBuf> {
     dunce::canonicalize(&path)
-        .with_context(|| anyhow!("failed to canonicalize relative path {:?}", path))
+        .with_context(|| format!("failed to canonicalize relative path {:?}", path))
 }
 
 fn cmd_failure_res(status: ExitStatus) -> anyhow::Result<()> {
