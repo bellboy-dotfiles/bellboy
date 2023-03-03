@@ -66,7 +66,11 @@ pub(crate) enum Cli {
         cmd_and_args: CommandAndArgs,
     },
     /// Remove a repo entry, attempting to remove all files associated with the repo's work tree.
-    Remove { name: RepoName<'static> },
+    Remove {
+        name: RepoName<'static>,
+        // // TODO: `--allow-dirty` subcommand
+        // allow_dirty: bool,
+    },
     // // TODO: A crazy ambitious idea to use the user's auto-magically detected shell?
     // Preposterous. :)
     // Enter {
