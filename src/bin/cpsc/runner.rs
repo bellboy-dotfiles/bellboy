@@ -307,7 +307,7 @@ impl Runner {
             },
             Cli::Run {
                 repo_name,
-                cd_root,
+                no_cd_root,
                 cmd_and_args,
             } => {
                 let Self { dirs, git, repos } = self;
@@ -328,7 +328,7 @@ impl Runner {
                     })?;
 
                 let repo = {
-                    if cd_root {
+                    if !no_cd_root {
                         cmd.current_dir(repo.work_tree_path(dirs)?);
                     }
                     repo.open(git, dirs, repo_name)?
@@ -382,7 +382,7 @@ impl Runner {
                     match self
                         .run(Cli::Run {
                             repo_name: repo_name.clone(),
-                            cd_root: !no_cd_root,
+                            no_cd_root,
                             cmd_and_args: cmd_and_args.clone(),
                         })
                         .with_context(|| anyhow!("failed to run command for repo {:?}", repo_name))
