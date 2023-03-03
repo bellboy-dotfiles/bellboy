@@ -103,7 +103,7 @@ pub enum StarterSubcommand {
 #[derive(Debug, Parser)]
 pub struct ListSubcommand {}
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RepoSpec {
     All,
     // Name(Regex),
@@ -159,7 +159,7 @@ impl FromStr for RepoSpec {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ListFormat {
     Flat,
     GroupByKind,

@@ -5,12 +5,12 @@ edition = "2021"
 homepage = "https://github.com/ErichDonGubler/capisco"
 license = "GPL-3.0"
 name = "capisco"
-rust-version = "1.56"
+rust-version = "1.60.0"
 version = "0.1.0-pre"
 
 [dependencies]
 anyhow = "1.0.42"
-clap = { version = "3.0.0", features = ["derive", "wrap_help"] }
+clap = { version = "4", features = ["derive", "wrap_help"] }
 colog = "1.1"
 directories = "4.0.1"
 dunce = "1.0.2"
