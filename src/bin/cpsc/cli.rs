@@ -46,7 +46,7 @@ pub(crate) enum Cli {
     Run {
         repo_name: RepoName<'static>,
         #[clap(long)]
-        cd_root: bool,
+        no_cd_root: bool,
         // #[clap(long)]
         // allow_standalone: bool,
         #[clap(flatten)]
