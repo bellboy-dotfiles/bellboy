@@ -173,7 +173,7 @@ impl<'a> Normalization<Cow<'a, Path>> for NormalizedRepoPathEq {
         let is_same_file = match (t1_exists, t2_exists) {
             (false, false) => t1 == t2,
             (false, true) | (true, false) => false,
-            (true, true) => is_same_file(&t1, &t2).map_err(|e| {
+            (true, true) => is_same_file(t1, t2).map_err(|e| {
                 anyhow!(
                     "failed to compare paths for equality: {:?}, {:?}: {}",
                     t1,
