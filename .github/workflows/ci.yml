@@ -36,6 +36,10 @@ jobs:
           override: true
           profile: minimal
           toolchain: stable
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo fmt --check
 
   cargo-test:
     strategy:
