@@ -57,7 +57,7 @@ impl Deref for RepoName<'_> {
 
     fn deref(&self) -> &Self::Target {
         let Self(c) = self;
-        &*c
+        c
     }
 }
 
@@ -123,7 +123,7 @@ impl RepoName<'_> {
 
     pub fn as_single_path_segment(&self) -> &Path {
         let Self(inner) = self;
-        Path::new(&*inner.as_ref())
+        Path::new(inner.as_ref())
     }
 }
 
@@ -193,13 +193,13 @@ impl RepoEntry<'_> {
         let work_tree_path;
         let options = match kind {
             RepoEntryKind::Standalone { .. } => OpenRepoOptions::Normal {
-                work_tree_path: &*repo_path,
+                work_tree_path: &repo_path,
             },
             RepoEntryKind::Overlay { .. } => {
                 work_tree_path = kind.work_tree_path(dirs)?;
                 OpenRepoOptions::Bare {
-                    repo_path: &*repo_path,
-                    work_tree_path: &*work_tree_path,
+                    repo_path: &repo_path,
+                    work_tree_path: &work_tree_path,
                 }
             }
         };
@@ -457,7 +457,7 @@ impl RepoDb {
             if !path_parent_is_dir {
                 bail!("path parent is not a directory")
             }
-            let res = create_dir(&path);
+            let res = create_dir(path);
             if matches!(&res, Err(e) if e.kind() != io::ErrorKind::AlreadyExists) {
                 res.context("failed to create target directory")?;
             }
@@ -697,7 +697,7 @@ impl RepoDb {
 
         let toml = toml::to_string(&standalone_repos_db)
             .expect("failed to serialize standalone repos DB as TOML");
-        fs::write(dirs.standalone_repo_db_path()?, &toml)
+        fs::write(dirs.standalone_repo_db_path()?, toml)
             .context("failed to write standalone repos DB")
     }
 

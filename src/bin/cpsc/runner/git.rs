@@ -257,8 +257,8 @@ pub struct GitRestoreError {
 
 fn prep_cmd(cmd: &mut Command, git_work_tree_path: &Path, git_dir_path: &Path) {
     cmd.envs([
-        ("GIT_WORK_TREE", (&*git_work_tree_path).as_os_str()),
-        ("GIT_DIR", (&*git_dir_path).as_os_str()),
+        ("GIT_WORK_TREE", git_work_tree_path.as_os_str()),
+        ("GIT_DIR", git_dir_path.as_os_str()),
     ]);
 }
 

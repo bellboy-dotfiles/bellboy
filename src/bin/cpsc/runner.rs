@@ -477,7 +477,7 @@ impl Display for RemoteName<'_> {
 }
 
 fn canonicalize_path(path: &Path) -> anyhow::Result<PathBuf> {
-    dunce::canonicalize(&path)
+    dunce::canonicalize(path)
         .with_context(|| anyhow!("failed to canonicalize relative path {:?}", path))
 }
 
