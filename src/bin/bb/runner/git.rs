@@ -1,15 +1,15 @@
-// Copyright 2021, Capisco maintainers.
-// This file is part of the [Capisco project](https://github.com/capisco-dotfiles/capisco).
+// Copyright 2021, Bellboy maintainers.
+// This file is part of the [Bellboy project](https://github.com/bellboy-dotfiles/bellboy).
 //
-// Capisco is free software: you can redistribute it and/or modify it under the terms of the GNU
+// Bellboy is free software: you can redistribute it and/or modify it under the terms of the GNU
 // General Public License as published by the Free Software Foundation, either version 3 of the
 // License, or (at your option) any later version.
 //
-// Capisco is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+// Bellboy is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
 // even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 // General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License along with Capisco.  If not,
+// You should have received a copy of the GNU General Public License along with Bellboy.  If not,
 // see <https://www.gnu.org/licenses/>.
 use lifetime::{IntoStatic, ToBorrowed};
 use std::{

@@ -1,16 +1,16 @@
 # Introduction
 
 This book offers guide-level documentation for
-[Capisco](https://github.com/capisco-dotfiles/capisco), a cross-platform
+[Bellboy](https://github.com/bellboy-dotfiles/bellboy), a cross-platform
 dotfiles manager that understands you.
 
 🚧 This documentation is still **under construction**. 🚧 Stay tuned for
-[project releases](https://github.com/capisco-dotfiles/capisco/releases), where
+[project releases](https://github.com/bellboy-dotfiles/bellboy/releases), where
 we'll be adding more content here soon!
 
 ---
 
-There are three key workflows that Capisco offers:
+There are three key workflows that Bellboy offers:
 
 1. `standalone` repos. These are typical Git repos, with some extra
 	declarative configuration so that you don't have to think about where to
@@ -30,14 +30,14 @@ There are three key workflows that Capisco offers:
 	4. `tmux` has a `~/.tmux.conf`.
 
 	...and the list goes on. Wouldn't it be nice to have the flexibility of
-	keeping these in separate repos? Capisco can do that for you!
+	keeping these in separate repos? Bellboy can do that for you!
 3. A nice command line interface for managing your repos via their assigned names.
 	This lets you do powerful things like check the status of _each_ of your
 	repos, or push their changes up to Git remotes, with a single command:
 
 	```sh
 	# Example: push up all changes for each repo
-	$ cpsc for-each -- git push
+	$ bb for-each -- git push
 	```
 
 All of these culminate in an experience that we think is too good to not share!

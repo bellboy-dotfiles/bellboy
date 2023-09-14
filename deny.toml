@@ -10,5 +10,5 @@ allow = [
 exceptions = [
 	# This is us! We don't automatically `allow` GPL-3.0 by default because
 	# that requires some extra work to integrate correctly.
-	{ name = "capisco", allow = ["GPL-3.0"] },
+	{ name = "bellboy", allow = ["GPL-3.0"] },
 ]
