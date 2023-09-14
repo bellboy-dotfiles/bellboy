@@ -1,0 +1,6 @@
+[book]
+authors = ["Erich Gubler"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Capisco Contributor Book"

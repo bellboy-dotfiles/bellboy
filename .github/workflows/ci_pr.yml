@@ -1,0 +1,10 @@
+name: CI (PR)
+
+on: [pull_request]
+jobs:
+  block-autosquash-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2.0.0
+      - name: Block merging fixup commits
+        uses: 13rac1/block-fixup-merge-action@v2.0.0
