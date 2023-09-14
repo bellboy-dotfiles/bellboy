@@ -1,10 +1,10 @@
 [package]
-authors = ["Capisco maintainers <https://github.com/capisco-dotfiles/capisco/graphs/contributors>"]
-description = "A cross-platform repo manager that understands you."
+authors = ["Bellboy maintainers <https://github.com/bellboy-dotfiles/bellboy/graphs/contributors>"]
+description = "A binary for managing dotfiles cross-platform. Take your dotfiles wherever you go!"
 edition = "2021"
-homepage = "https://github.com/ErichDonGubler/capisco"
+homepage = "https://github.com/ErichDonGubler/bellboy"
 license = "GPL-3.0"
-name = "capisco"
+name = "bellboy"
 rust-version = "1.64.0"
 version = "0.1.0-pre"
 
