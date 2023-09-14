@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "bellboy"
 repository = "https://github.com/bellboy-dotfiles/bellboy"
 rust-version = "1.64.0"
-version = "0.1.0-pre"
+version = "0.2.0-alpha.1"
 
 [package.metadata.binstall]
 
