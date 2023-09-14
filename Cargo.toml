@@ -9,6 +9,8 @@ repository = "https://github.com/bellboy-dotfiles/bellboy"
 rust-version = "1.64.0"
 version = "0.1.0-pre"
 
+[package.metadata.binstall]
+
 [dependencies]
 anyhow = "1.0.42"
 clap = { version = "4", features = ["derive", "wrap_help"] }
