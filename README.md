@@ -1,5 +1,8 @@
 # Bellboy 🛎️🧳
 
+> [!WARNING]
+> This is all heavily WIP! There are bugs and sharp edges that can _eat your dotfiles_. 
+
 A binary for managing dotfiles cross-platform. Take your dotfiles wherever you
 go!
 
