@@ -37,7 +37,7 @@ dependencies = [
 
 [[package]]
 name = "bellboy"
-version = "0.2.0-alpha.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
