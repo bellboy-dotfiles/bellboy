@@ -1,4 +1,4 @@
-# Bellboy 💡☝️
+# Bellboy 🛎️🧳
 
 A binary for managing dotfiles cross-platform. Take your dotfiles wherever you
 go!
