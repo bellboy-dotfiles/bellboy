@@ -1,6 +1,6 @@
 [package]
 authors = ["Bellboy maintainers <https://github.com/bellboy-dotfiles/bellboy/graphs/contributors>"]
-description = "A cross-platform repo manager that understands you."
+description = "A binary for managing dotfiles cross-platform. Take your dotfiles wherever you go!"
 edition = "2021"
 homepage = "https://github.com/ErichDonGubler/bellboy"
 license = "GPL-3.0"

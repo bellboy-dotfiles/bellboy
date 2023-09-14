@@ -1,6 +1,7 @@
 # Bellboy 💡☝️
 
-A cross-platform dotfiles manager that understands you.
+A binary for managing dotfiles cross-platform. Take your dotfiles wherever you
+go!
 
 Bellboy is a Git repository manager oriented towards cross-platform dotfiles.
 It draws heavy inspiration from [`vcsh`], which focuses on managing local
