@@ -1,0 +1,11 @@
+[package]
+authors = ["Bellboy maintainers <https://github.com/bellboy-dotfiles/bellboy/graphs/contributors>"]
+description = "A binary for managing dotfiles cross-platform. Take your dotfiles wherever you go!"
+edition = "2021"
+homepage = "https://github.com/bellboy-dotfiles/bellboy"
+license = "GPL-3.0"
+name = "bellboy"
+rust-version = "1.64.0"
+version = "0.1.0-pre"
+
+[dependencies]
