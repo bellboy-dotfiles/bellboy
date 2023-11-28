@@ -6,7 +6,7 @@ homepage = "https://github.com/bellboy-dotfiles/bellboy"
 license = "GPL-3.0"
 name = "bellboy"
 repository = "https://github.com/bellboy-dotfiles/bellboy"
-rust-version = "1.64.0"
+rust-version = "1.74.0"
 version = "0.2.0"
 
 [package.metadata.binstall]

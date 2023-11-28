@@ -49,7 +49,7 @@ jobs:
           - macos-latest
           - ubuntu-latest
         toolchain:
-          - 1.64.0
+          - 1.74.0
           - stable
     runs-on: ${{ matrix.os }}
     steps:
