@@ -1,0 +1,59 @@
+# This is a template definition file for [Capisco]. If you find the need to
+# edit one of these manually, it's almost certainly a bug, missing, or
+# out-of-date. Please file an issue [upstream][issue tracker]!
+#
+# [Capisco]: https://github.com/capisco-dotfiles/capisco
+# [issue tracker]: https://github.com/capisco-dotfiles/capisco
+
+[capisco]
+type = "template"
+schema_version = "1"
+
+# ---
+
+[template]
+name = "git"
+
+[[versions]]
+number = 1
+# TODO: Maybe use a `default_variant = false` to force a user to pick?
+default_variant = "home_dir_gitconfig" # defaults to `"default"`
+
+[template.variants.home_dir_gitconfig]
+checkout_location = { type = "overlay", files = [".gitconfig"] }
+
+[template.variants.xdg]
+checkout_location = { type = "xdg" } # `subdir` is omitted, and inferred to be `template.name`'s value
+
+# ---
+
+[template]
+name = "neovim"
+# version = 1
+# default_variant = "default"
+
+[template.variants.default]
+checkout_location = { type = "xdg", subdir = "nvim" }
+# # If we actually wanted the `neovim` segment, we could go with:
+# standalone = { type = "xdg" }
+
+[template.variants.default.windows]
+checkout_location = "~/AppData/Local/nvim" # Paths _must_ start with `~`. If you'd like to see this relaxed, holler at <TODO: ISSUE REF>.
+
+# ---
+
+[template]
+name = "nushell"
+
+[template.variants.default]
+checkout_location = { type = "native" }
+# # The above is shorthand for:
+# checkout_location = { type = "native", qualifier = "", org = "", app = "nushell" }
+
+# ---
+
+[template]
+name = "espanso"
+
+[template.variants.default]
+checkout_location = { type = "native" }

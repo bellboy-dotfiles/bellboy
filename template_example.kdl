@@ -1,0 +1,74 @@
+// This is a template definition file for [Capisco]. If you find the need to
+// edit one of these manually, it's almost certainly a bug, missing, or
+// out-of-date. Please file an issue [upstream][issue tracker]!
+//
+// [Capisco]: https://github.com/capisco-dotfiles/capisco
+// [issue tracker]: https://github.com/capisco-dotfiles/capisco
+
+capisco-header {
+	type "template"
+	schema-version 1
+}
+
+template git {
+	version 1 default-variant=home-dir-gitconfig {
+		home-dir-gitconfig {
+			all {
+				type "overlay"
+				root "~"
+				files {
+					.gitconfig
+				}
+			}
+		}
+		xdg {
+			type "global"
+			// `subdir` is inferred to be the template's name when omitted
+		}
+	}
+}
+
+template neovim {
+	version 1 {
+		default {
+			unix {
+				checkout-location {
+					type "xdg"
+					subdir "nvim"
+				}
+			}
+			windows {
+				checkout-location {
+					type "windows-local-appdata"
+					app-name "nvim"
+				}
+			}
+		}
+	}
+}
+
+template nushell {
+	version 1 {
+		all {
+			checkout_location {
+				type "native"
+				qualifier ""
+				org ""
+				app "nushell"
+			}
+		}
+	}
+}
+
+template espanso {
+	version 1 {
+		all {
+			checkout_location {
+				type "native"
+				qualifier ""
+				org ""
+				app "nushell"
+			}
+		}
+	}
+}

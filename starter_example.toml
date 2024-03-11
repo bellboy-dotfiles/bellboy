@@ -1,0 +1,51 @@
+# This file is a _Capisco starter file_. It's used with [Capisco] (a dotfiles
+# management tool) to clone multiple dotfiles repositories with a single
+# command, i.e.:
+#
+# ```sh
+# $ cpsc export $THIS_FILE # save current configuration of repos
+# $ cpsc import $THIS_FILE # load configuration back again
+# ```
+#
+# [Capisco]: https://github.com/capisco-dotfiles/capisco
+
+[capisco]
+type = "starter"
+schema_version = "1"
+
+[throwaway]
+git_url = "https://github.com/throwaway-fanboy/throwaway"
+# # The following are optional values with their default values provided for
+# # illustration:
+# remote_name = "origin"
+# branch = "main" # Falls back to `"master"`, if not found.
+
+# # Additional remotes can be added using sub-tables of `<name>.remotes`. For
+# # example, if we wanted to add an `upstream` remote, we could do so like
+# # this:
+# [throwaway.remotes.upstream]
+# git_url = "https://github.com/throwaway/throwaway"
+
+# # TODO: Template selection, or actual assignment? I think we should go with
+# # assignment for now, but I'm not sure.
+# #
+# # For best experience with your own repos, it's strongly recommended you
+# # embed a repository configuration (`capisco.toml`) in them. However, you can
+# # also specify or override a configuration here. It uses the same schema as
+# # [template file entries].
+# #
+# # [template file entries]: TODO
+# [throwaway.template]
+# name = "neovim"
+#
+# [throwaway.template.override.windows]
+# standalone = ""
+
+[git]
+git_url = "git@github.com:erichdongubler-dotfiles/git"
+
+[neovim]
+git_url = "git@github.com:erichdongubler-dotfiles/neovim"
+
+[nushell]
+git_url = "git@github.com:erichdongubler-dotfiles/nushell"

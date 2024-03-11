@@ -1,0 +1,21 @@
+# This is a local repository configuration for [Capisco], likely created via
+# `cpsc new`. If you find the need to edit this manually, it's almost certainly
+# a bug or out-of-date template definition. Please file an issue
+# [upstream][issue tracker]!
+#
+# [Capisco]: https://github.com/capisco-dotfiles/capisco
+# [issue tracker]: https://github.com/capisco-dotfiles/capisco
+
+[capisco]
+type = "repo"
+schema_version = "1"
+
+[repo]
+checkout_location = { type = "xdg", subdir = "nvim" }
+
+[history.template]
+source = "https://github.com/capisco-dotfiles/templates"
+rev = "ASDFASDFASDF"
+template = "neovim"
+variant = "default"
+version = 1
