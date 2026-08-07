@@ -103,17 +103,12 @@ pub enum StarterSubcommand {
 #[derive(Debug, Parser)]
 pub struct ListSubcommand {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum RepoSpec {
+    #[default]
     All,
     // Name(Regex),
     Kind(CliRepoKind),
-}
-
-impl Default for RepoSpec {
-    fn default() -> Self {
-        Self::All
-    }
 }
 
 #[derive(Debug, ThisError)]
@@ -159,16 +154,11 @@ impl FromStr for RepoSpec {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum ListFormat {
+    #[default]
     Flat,
     GroupByKind,
-}
-
-impl Default for ListFormat {
-    fn default() -> Self {
-        Self::Flat
-    }
 }
 
 #[derive(Debug, ThisError)]
