@@ -486,7 +486,7 @@ mod cli {
         }
 
         fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError> {
-            let mut cmd = Command::new("git");
+            let mut cmd = Self::git_cmd();
             cmd.arg("ls-files").stderr(Stdio::inherit());
             (|| {
                 let cwd = current_dir()?;
@@ -523,7 +523,7 @@ mod cli {
         }
 
         fn reset(&mut self) -> Result<(), GitResetError> {
-            let mut cmd = Command::new("git");
+            let mut cmd = Self::git_cmd();
             cmd.arg("reset");
             Ok(self
                 .run_cmd(cmd, |mut cmd| cmd.status())
@@ -532,7 +532,7 @@ mod cli {
         }
 
         fn restore(&mut self) -> Result<(), GitRestoreError> {
-            let mut cmd = Command::new("git");
+            let mut cmd = Self::git_cmd();
             cmd.arg("restore");
             Ok(self
                 .run_cmd(cmd, |mut cmd| cmd.status())
