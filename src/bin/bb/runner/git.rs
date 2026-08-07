@@ -54,8 +54,6 @@ pub trait GitRepoTrait {
 
     fn run_cmd<T>(&self, cmd: Command, f: impl FnOnce(Command) -> T) -> T;
     fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError>;
-    fn set_attributes_file(&mut self, path: Option<&Path>)
-        -> Result<(), GitSetAttributesFileError>;
     fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError>;
     fn reset(&mut self) -> Result<(), GitResetError>;
     fn restore(&mut self) -> Result<(), GitRestoreError>;
@@ -130,15 +128,6 @@ impl GitRepoTrait for DynGitRepo {
     fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError> {
         match self {
             Self::Cli(cli) => cli.set_excludes_file(path),
-        }
-    }
-
-    fn set_attributes_file(
-        &mut self,
-        path: Option<&Path>,
-    ) -> Result<(), GitSetAttributesFileError> {
-        match self {
-            Self::Cli(cli) => cli.set_attributes_file(path),
         }
     }
 
@@ -222,12 +211,6 @@ const EXCLUDES_FILE_CONFIG_PATH: &str = "core.excludesFile";
 #[error("failed to set `{}` config", EXCLUDES_FILE_CONFIG_PATH)]
 pub struct GitSetExcludeFileError(#[from] anyhow::Error);
 
-const ATTRIBUTES_FILE_CONFIG_PATH: &str = "core.attributesFile";
-
-#[derive(Debug, ThisError)]
-#[error("failed to set `{}` config", ATTRIBUTES_FILE_CONFIG_PATH)]
-pub struct GitSetAttributesFileError(#[from] anyhow::Error);
-
 #[derive(Debug, ThisError)]
 #[error("failed to open repo at {}", path.display())]
 pub struct OpenRepoError {
@@ -267,7 +250,7 @@ mod cli {
         prep_cmd, GitCloneError, GitExistCheckFailure, GitExistError, GitInitError,
         GitListFilesError, GitRepoKind, GitRepoTrait, GitResetError, GitRestoreError,
         GitSetExcludeFileError, GitTrait, OpenRepoError, OpenRepoOptions, RepoSource,
-        ATTRIBUTES_FILE_CONFIG_PATH, EXCLUDES_FILE_CONFIG_PATH,
+        EXCLUDES_FILE_CONFIG_PATH,
     };
     use crate::runner::{
         canonicalize_path, cmd_failure_err, cmd_failure_res,
@@ -500,13 +483,6 @@ mod cli {
 
         fn set_excludes_file(&mut self, path: Option<&Path>) -> Result<(), GitSetExcludeFileError> {
             Ok(self.config_set(EXCLUDES_FILE_CONFIG_PATH, path)?)
-        }
-
-        fn set_attributes_file(
-            &mut self,
-            path: Option<&Path>,
-        ) -> Result<(), super::GitSetAttributesFileError> {
-            Ok(self.config_set(ATTRIBUTES_FILE_CONFIG_PATH, path)?)
         }
 
         fn list_files(&self) -> Result<Self::ListFilesIter, GitListFilesError> {
