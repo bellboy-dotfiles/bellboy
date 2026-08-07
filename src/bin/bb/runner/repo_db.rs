@@ -398,13 +398,21 @@ impl RepoDb {
             let mut repo = repo.open(git, dirs, name.to_borrowed())?;
             let name: &str = name.as_ref();
             let home = dirs.home_dir_path()?;
-            let repo_specific_special_path = |segment| path!(home | segment | name);
+            let repo_specific_special_path = |segment| path!(&home | segment | name);
             if let Err(e) = repo
                 .set_excludes_file(Some(&repo_specific_special_path(".gitignore.d")))
                 .context("failed to set Git excludes file")
             {
                 log::warn!("{}", e);
             }
+
+            if let Err(e) =
+                repo.set_attributes_file(Some(&repo_specific_special_path(".gitattributes")))
+            {
+                log::error!("{}", e);
+            }
+
+            // TODO: Looks like we need to set the remote, boo!
         }
 
         Ok((name, repo))
