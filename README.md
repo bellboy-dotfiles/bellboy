@@ -32,6 +32,7 @@ Ready to dive in deeper? You should try:
 
 ## Installation
 
+<!-- TODO: recommend `cargo-binstall` -->
 For now, you may build Bellboy via [Cargo](https://doc.rust-lang.org/cargo/):
 
 ```sh
